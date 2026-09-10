@@ -1,0 +1,3580 @@
+openapi: 3.1.0
+info:
+  description: API specification for the analytics-facade service.
+  title: Analytics Facade REST API
+  version: '0.0.1-SNAPSHOT'
+servers:
+- description: local development server
+  url: http://localhost:8080/analytics-facade
+- description: VCP-DC/OS server
+  url: "http://{deployment_sub_config}wrfoundationuianalyticsfacadeservice.marathon.l4lb.thisdcos.directory:8080/analytics-facade"
+  variables:
+    deployment_sub_config:
+      default: prod
+      enum:
+      - prod
+tags:
+- description: "user session expose creation, validation and termination of a user-session."
+  name: user-session
+- description: Custom API endpoint to allow LINDA application.
+  name: linda
+- description: Custom API endpoint to allow LINDA application to interface with platform
+    related services for data from workspace
+  name: linda-data
+- description: "Workspace [v2] basic API operations."
+  name: "workspace [v2]"
+- description: Workspace blob basic API operations.
+  name: "workspace [v2] blob"
+- description: Database basic API operations
+  name: database
+- description: Custom API endpoint to allow LINDA application to interface with platform
+    related services for contexts for given workspace
+  name: linda-context
+- description: Processing Instance basic API operations
+  name: processing
+- description: workspace api that requires an user session and can create and delete
+    a workspace.
+  name: workspace
+- description: Notification API operations
+  name: notifications
+- description: Asset management API operations
+  name: asset
+- description: Custom API endpoint to allow LINDA application to interface with platform
+    related services related to 'ovl-tdbb'
+  name: linda-tdbb
+paths:
+  /linda/v1/context/{workspaceId}:
+    get:
+      description: Returns context data response. The response contains a hardcoded
+        list for context-types the values depend on the data available in workspace.
+      operationId: getLindaContextData
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/getLindaContextResponse"
+              schema:
+                $ref: "#/components/schemas/ContextResponse"
+          description: Successfully returns the context-types and their values for
+            the given workspace
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "422":
+          content:
+            application/json:
+              example:
+                title: Error while fetching context data
+                errorID: ANALYTICS_FACADE.LINDA.CONTEXT_DATA_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: All context selections were removed due to userInput invalidation
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - linda-context
+      - linda
+  /linda/v1/data/{workspaceId}/{flowInstanceId}:
+    get:
+      description: Retrieve dataset result for given workspaceId and only the rows
+        that match the flowInstanceId.The response body will contain the resulting
+        data in tabular format.The response also contains the list of columns and
+        the data is in the same order as the list of columns.The response contains
+        all the columns produced by the flow.
+      operationId: getLindaData
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: flowInstanceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/getLindaDataResponse"
+              schema:
+                $ref: "#/components/schemas/DataResponse"
+          description: Successfully returns the dataset
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: DataRecordCollectionId not found for WorkspaceId:453927b7-6e24-4755-a678-df30dacae240
+                errorID: ANALYTICS_FACADE.LINDA.GET_DATA_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Failed to find DataRecordCollectionId in workspace. Or failed
+            to find DataRecordCollection in  inventory. Or failed to find TableReference
+            for the flow.
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - linda-data
+      - linda
+  /linda/v1/tdbb/execute/{workspaceId}:
+    post:
+      description: Execute an ovl-tdbb flow for a given workspace with specified settings
+        asynchronously.
+      operationId: executeLindaTdbbFlow
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            examples:
+              input:
+                $ref: "#/components/examples/postLindaFlowRequest"
+            schema:
+              $ref: "#/components/schemas/FlowExecutionRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/postLindaFlowResponse"
+              schema:
+                $ref: "#/components/schemas/FlowStatusResponse"
+          description: Successfully started execution of an ovl-tddb flow
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - linda-tdbb
+      - linda
+  /linda/v1/tdbb/status/{workspaceId}/{flowInstanceId}:
+    get:
+      description: Returns status of flow based on workspaceId and the specific flowInstanceId.
+      operationId: getLindaTdbbFlowStatus
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: flowInstanceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/getLindaFlowStatusResponse"
+              schema:
+                $ref: "#/components/schemas/FlowStatusResponse"
+          description: Successfully returns the status of the flow.
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowStatusResponse"
+          description: Failed to find flow and/or workspace
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - linda-tdbb
+      - linda
+  /v1/asset:
+    get:
+      description: Retrieve all accessible asset references for the authenticated
+        user
+      operationId: getAllAccessibleAssets
+      parameters:
+      - description: Filter by asset type (exact match)
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+      - description: Filter by asset name (case-insensitive partial match)
+        in: query
+        name: name
+        required: false
+        schema:
+          type: string
+      - description: Filter by sharing type
+        in: query
+        name: sharing
+        required: false
+        schema:
+          type: string
+          description: The sharing options for an asset.
+          enum:
+          - private
+          - public
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetReference"
+          description: Successfully retrieved all accessible assets
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - asset
+    post:
+      description: Upload a new asset with metadata
+      operationId: addAsset
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                asset:
+                  type: string
+                  format: binary
+                request:
+                  $ref: "#/components/schemas/AssetReferenceRequest"
+              required:
+              - asset
+              - request
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetReference"
+          description: Successfully uploaded the asset
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "413":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssetReference"
+          description: Asset file size exceeds the maximum allowed limit (10Mb)
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - asset
+  /v1/asset/{id}:
+    delete:
+      description: Delete an asset from GridFS by its asset reference ID
+      operationId: deleteAsset
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successfully deleted the asset
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          description: Asset not found or user not authorized
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - asset
+    put:
+      description: Update an asset reference metadata by its ID
+      operationId: updateAsset
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetReferenceUpdateRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetReference"
+          description: Successfully updated the asset reference
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetReference"
+          description: Asset not found or user not authorized
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - asset
+  /v1/asset/{id}/download:
+    get:
+      description: Download an asset from GridFS by its asset reference ID
+      operationId: getAsset
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/octet-stream: {}
+          description: Successfully retrieved the asset
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          description: Asset not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - asset
+  /v1/notifications:
+    get:
+      description: Retrieve notifications
+      operationId: getNotifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationResponse"
+          description: Successfully retrieved list of notifications
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - notifications
+    post:
+      description: Create a new notification
+      operationId: createNotification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+          description: Successfully created the notification
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - notifications
+  /v1/notifications/long-poll:
+    get:
+      description: Retrieve new notifications using long-polling
+      operationId: longPollNotifications
+      parameters:
+      - description: Optional parameter to let endpoint respond with existing notifications
+          created after the given timestamp.
+        in: query
+        name: since
+        required: false
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationResponse"
+          description: Successfully retrieved list of notifications
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - notifications
+  /v1/notifications/read:
+    put:
+      description: Mark notifications as read
+      operationId: readNotifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReadRequest"
+        required: true
+      responses:
+        "204":
+          description: Notifications marked as read
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - notifications
+  /v1/user/session:
+    delete:
+      description: Terminates a session of authenticated user based on their token.
+      operationId: terminateUserSession
+      responses:
+        "204":
+          description: Successfully terminated the session of the user
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - user-session
+    get:
+      description: Validates if the given token is still valid for the session for
+        user.
+      operationId: validateUserSession
+      responses:
+        "204":
+          description: Successfully validated the token
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - user-session
+    post:
+      description: Creates a user session based on credentials.
+      operationId: createUserSession
+      requestBody:
+        content:
+          application/json:
+            examples:
+              input:
+                $ref: "#/components/examples/postSessionRequest"
+            schema:
+              $ref: "#/components/schemas/UserAuthenticationRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/postSessionResponse"
+              schema:
+                $ref: "#/components/schemas/UserAuthenticationResponse"
+          description: Successfully created a session for the user
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - user-session
+  /v1/workspace:
+    post:
+      description: Creates a workspace based on filter list.
+      operationId: createWorkspace_1
+      requestBody:
+        content:
+          application/json:
+            examples:
+              input:
+                $ref: "#/components/examples/postWorkspaceRequest"
+            schema:
+              $ref: "#/components/schemas/WorkspaceCreationRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              examples:
+                output:
+                  $ref: "#/components/examples/postWorkspaceResponse"
+              schema:
+                $ref: "#/components/schemas/WorkspaceCreationResponse"
+          description: Successfully created the workspace
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "422":
+          content:
+            application/json:
+              example:
+                title: Error while creating DRC in PDS
+                errorID: ANALYTICS_FACADE.PROCESSING_DATA.CREATE_DRC_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: The server cannot process the request because the DataRecordCollection
+            referenced in the request is empty.
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - workspace
+  /v1/workspace/{workspaceId}:
+    delete:
+      description: Deletes a workspace based on workspaceId.
+      operationId: deleteWorkspace
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Successfully deleted the workspace
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          description: "Failed to delete Workspace, doesn't exist for user or cannot\
+            \ be found"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - workspace
+  /v2/workspaces:
+    post:
+      description: "Creates a workspace [v2] based on applicationId."
+      operationId: createWorkspace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+          description: "Successfully created the workspace [v2]"
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/application/{id}:
+    get:
+      description: "Retrieve all the workspaces [v2] associated with an applicationId\
+        \ for an authenticated user."
+      operationId: getAllWorkspacesByApplicationId
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceResponse"
+          description: "Successfully retrieved all workspaces [2] associated with\
+            \ the applicationId"
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}:
+    delete:
+      description: "Deletes a workspace [v2] by its id."
+      operationId: deleteWorkspaceById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: "Successfully deleted the workspace [v2]"
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+    get:
+      description: "Retrieve the workspace [v2] associated with a specific id."
+      operationId: getWorkspaceById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+          description: "Successfully retrieved the workspaces [2] with the specific\
+            \ id"
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/cancel-data-ingestion:
+    post:
+      description: Cancel on-demand data ingestion for a workspace.
+      operationId: cancelDataIngestion
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Successfully cancelled data ingestion
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "422":
+          content:
+            application/problem+json:
+              example:
+                title: No data selection applied to WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.NO_DATA_SELECTION
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Pre-condition failure: no data selection applied"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/connection-info:
+    get:
+      description: Retrieve the connection information to access the database associated
+        with the workspace.
+      operationId: getConnectionInfo
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceConnectionInfo"
+          description: Successfully retrieved the connection information
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "422":
+          content:
+            application/problem+json:
+              example:
+                title: No data selection applied to WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.NO_DATA_SELECTION
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Pre-condition failure: no data selection applied"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/data-ingestion:
+    get:
+      description: Retrieve the data ingestion progress for a specific workspace.
+      operationId: getDataIngestionByWorkspaceId
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceDataIngestion"
+          description: Successfully retrieved the data ingestion progress
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/data-selection:
+    get:
+      description: Retrieve the data selection associated with a specific workspace.
+      operationId: getDataSelectionByWorkspaceId
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSelection"
+          description: Successfully retrieved the data selection
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+    put:
+      description: Updates workspace's data selection.
+      operationId: updateDataSelection
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Set to "true" to opt out from automatic data ingestion after
+          updating the data selection.
+        in: query
+        name: skipAutoIngestion
+        required: false
+        schema:
+          type: boolean
+          default: false
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataSelection"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSelectionResponse"
+          description: Successfully updated the data selection
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/start-data-ingestion:
+    post:
+      description: "Triggers on-demand data ingestion for a workspace. If proxy dataset\
+        \ partitions exist, ingestion is started and the updated progress is returned.\
+        \ If no proxy partitions are present the call is a no-op."
+      operationId: startDataIngestion
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSelectionResponse"
+          description: Successfully started (or confirmed no-op for) on-demand data
+            ingestion
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "409":
+          content:
+            application/problem+json:
+              example:
+                title: No data selection applied to WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.NO_DATA_SELECTION
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: No data selection applied to workspace
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{id}/state:
+    get:
+      description: Retrieves the applicationState from a specific workspace.
+      operationId: getApplicationState
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonNode"
+          description: Successfully retrieved the application state
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              examples:
+                Application state not found:
+                  description: Application state not found
+                  value:
+                    title: No application state found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                    errorID: ANALYTICS_FACADE.WORKSPACE.NO_APPLICATION_STATE
+                Workspace not found:
+                  description: Workspace not found
+                  value:
+                    title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                    errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Resource not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+    put:
+      description: Updates workspace's application state.
+      operationId: updateApplicationState
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JsonNode"
+        required: true
+      responses:
+        "204":
+          description: Successfully updated the application state
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2]"
+  /v2/workspaces/{workspaceId}/blob:
+    get:
+      description: Retrieve all workspace blobs
+      operationId: getAllWorkspaceBlobs
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Filter by type
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Successfully retrieved workspace blobs
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+    post:
+      description: Upload a new blob to a workspace
+      operationId: addBlob
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                blob:
+                  type: string
+                  format: binary
+                request:
+                  $ref: "#/components/schemas/WorkspaceBlobRequest"
+              required:
+              - blob
+              - request
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Successfully uploaded the blob
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "413":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Blob file size exceeds the maximum allowed limit (10Mb)
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+  /v2/workspaces/{workspaceId}/blob/{blobId}:
+    get:
+      description: Retrieve a workspace blob by its ID
+      operationId: getBlob
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: blobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Successfully retrieved the workspace blob
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Blob not found or doesn't belong to workspace
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+    put:
+      description: Update a workspace blob by its ID
+      operationId: updateBlob
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: blobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                blob:
+                  type: string
+                  format: binary
+                request:
+                  $ref: "#/components/schemas/WorkspaceBlobUpdateRequest"
+              required:
+              - request
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Successfully updated the workspace blob
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Blob not found or doesn't belong to workspace
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBlob"
+          description: Blob file size exceeds the maximum allowed limit (10Mb)
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+  /v2/workspaces/{workspaceId}/blob/{blobId}/download:
+    get:
+      description: Download a workspace blob file by its ID
+      operationId: downloadBlob
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: blobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/octet-stream: {}
+          description: Successfully downloaded the blob file
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          description: Blob not found or doesn't belong to workspace
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+  /v2/workspaces/{workspaceId}/blob/{id}:
+    delete:
+      description: Delete a workspace blob by its ID
+      operationId: deleteBlob
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Successfully deleted the blob
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          description: Blob not found or doesn't belong to workspace
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - "workspace [v2] blob"
+  /v2/workspaces/{workspaceId}/database:
+    put:
+      description: Creates a database according to the data selection of the workspace.
+      operationId: createDatabase
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatabaseCreationRequest"
+        required: true
+      responses:
+        "204":
+          description: Successfully created the database with selected data.
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - database
+  /v2/workspaces/{workspaceId}/database/refresh:
+    post:
+      description: Updates a database with data created by finished processing services.
+      operationId: refreshDatabase
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Successfully updated a database with data from finished processing
+            services.
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - database
+  /v2/workspaces/{workspaceId}/processing:
+    get:
+      operationId: listProcessingInstances
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: serviceName
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: serviceVersion
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcessingInstanceResponse"
+          description: Successfully retrieved all processing instances
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - processing
+    post:
+      description: Enqueues starting processing instance
+      operationId: createProcessingInstance
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessingInstanceRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingInstanceResponse"
+          description: Enqueued Processing Instance
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "422":
+          content:
+            application/problem+json:
+              example:
+                title: No data selection applied to WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.NO_DATA_SELECTION
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Pre-condition failure: no data selection applied"
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - processing
+  /v2/workspaces/{workspaceId}/processing/{id}:
+    get:
+      description: Retrieve the processing instance associated with a specific id.
+      operationId: getProcessingInstanceById
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingInstanceResponse"
+          description: Successfully retrieved the processing instance with the specific
+            id
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - processing
+  /v2/workspaces/{workspaceId}/processing/{id}/stop:
+    post:
+      description: Enqueues stopping a processing instance
+      operationId: stopProcessingInstance
+      parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "202":
+          description: Stop request accepted
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Required request parameter is not present
+                errorID: ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "401":
+          content:
+            application/problem+json:
+              example:
+                title: Unauthorized
+                errorID: ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: "Unauthorized request: authentication token is missing"
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: No workspace found for WorkspaceId:8ea7f282-9b3a-4edc-b9ea-e722c730771a
+                errorID: ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Workspace not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      security:
+      - bearerHttpAuthentication: []
+      tags:
+      - processing
+components:
+  examples:
+    getLindaContextResponse:
+      value:
+        contexts:
+        - key: measureprocessjob_starttime
+          values:
+          - 2025-02-10T11:42:32.0090000
+        - key: measureprocessjob_lotid
+          values:
+          - "1313"
+        - key: measureprocessjob_equipment_equipmentid
+          values:
+          - m1002
+        - key: measureprocessjob_wafermeasureprocessjob_waferid
+          values:
+          - wafer-1
+          - wafer-2
+          - wafer-3
+        - key: computejob_flowexecution_commontdbb_tdbblevel
+          values:
+          - omnipotent
+          - "omnipotent, exposureprocessjob_waferexposureprocessjob_chuck_id"
+          - "omnipotent, exposureprocessjob_waferexposureprocessjob_chuck_id, exposureprocessjob_starttime,\
+            \ exposureprocessjob_lotid, exposureprocessjob_equipment_equipmentid"
+          - "omnipotent, exposureprocessjob_waferexposureprocessjob_chuck_id, exposureprocessjob_starttime,\
+            \ exposureprocessjob_lotid, exposureprocessjob_equipment_equipmentid,\
+            \ exposureprocessjob_waferexposureprocessjob_waferid"
+        - key: computejob_flowexecution_executioninstanceid
+          values:
+          - 8e182a41-9377-4682-b96a-82e434db1ca7
+    getLindaDataResponse:
+      value:
+        columnsHeaders:
+        - computejob_flowexecution_executioninstanceid
+        - measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_field_center_y
+        - measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_field_center_x
+        - measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_x
+        - measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_y
+        - exposureprocessjob_reticle_image_imagesize_width
+        - exposureprocessjob_reticle_image_imagesize_height
+        - exposureprocessjob_waferexposureprocessjob_exposurelogicalwafer_exposedfield_scandirection
+        - exposureprocessjob_lotid
+        - exposureprocessjob_waferexposureprocessjob_waferid
+        - exposureprocessjob_waferexposureprocessjob_chuck_id
+        - COMMON_meanWafer1storder139a0f12e8eed099XVALIDS_ONLY
+        - COMMON_meanWafer1storder139a0f12e8eed099YVALIDS_ONLY
+        data:
+        - - 8e182a41-9377-4682-b96a-82e434db1ca7
+          - null
+          - null
+          - -11.642406
+          - -16.095801
+          - 23.65
+          - 32.59
+          - UNKNOWN
+          - null
+          - null
+          - null
+          - null
+          - null
+        - - 8e182a41-9377-4682-b96a-82e434db1ca7
+          - -141.6
+          - 36.001
+          - 11.598033
+          - -16.09513
+          - 23.65
+          - 32.59
+          - UPWARDS
+          - null
+          - null
+          - null
+          - -0.15161578156894354
+          - 0.17306953315140844
+        - - 8e182a41-9377-4682-b96a-82e434db1ca7
+          - 47.2
+          - 133.621
+          - -0.515821
+          - 3.137122
+          - 23.65
+          - 32.59
+          - DOWNWARDS
+          - null
+          - null
+          - null
+          - -0.05960636571333027
+          - -0.2637671308653929
+    getLindaFlowStatusResponse:
+      value:
+        details: null
+        instanceId: 8e182a41-9377-4682-b96a-82e434db1ca7
+        percentage: 0
+        status: STARTED
+    postLindaFlowRequest:
+      value:
+        settings:
+        - componentId: ee510538-f165-4419-847a-ad639f3e7b5c
+          value:
+            decorrectionSetting:
+              nonCpe: ""
+            healthFilterSetting:
+              edgeClearance:
+                enabled: true
+                value: 3.0
+            selectedKpi: Overlay
+            targetLabelSetting:
+              targetLabelSelectionX:
+                enabled: true
+                labels: []
+              targetLabelSelectionY:
+                enabled: true
+                labels: []
+        - componentId: 5cf5defe-71e8-4c82-a13b-a7724d5c0704
+          value:
+            maximumModelUncertaintyUnhealthyParametersX: 0
+            maximumModelUncertaintyUnhealthyParametersY: 0
+        - componentId: 2b36b496-5f77-45f4-ad80-6f3ebdbd5b6e
+          value: 0
+        - componentId: 7ff2c9d9-967a-464e-bc3c-4d6ba7edc8cd
+          value: true
+    postLindaFlowResponse:
+      value:
+        details: null
+        instanceId: 8e182a41-9377-4682-b96a-82e434db1ca7
+        percentage: 0
+        status: STARTED
+    postSessionRequest:
+      value:
+        password: guest
+        username: white-rabbit-guest
+    postSessionResponse:
+      value:
+        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2dnZWRJbkFzIjoiYWRtaW4iLCJpYXQiOjE0MjI3Nzk2Mzh9.gzSraSYS8EXBxLN
+          _oWnFSRgCzcmJmMjLiuyu5CSpyHI=
+    postWorkspaceRequest:
+      value:
+        applicationId: LINDA
+        filterList:
+        - centricity: MEASURE_CENTRIC
+          measureProcessJob:
+            equipmentId: "1111"
+            lotId: Lot33fpAJ3
+            startTime: 1670453500000
+          performanceDomain: OVERLAY
+        - centricity: EXPOSURE_CENTRIC
+          lisJobId: 1312.job
+          performanceDomain: OVERLAY
+    postWorkspaceResponse:
+      value:
+        id: a9e5724c-466a-482f-824f-0a8e8dec2903
+        size: 100
+  schemas:
+    AnyTabularType:
+      type: array
+      example:
+      - - Lot32
+        - 5
+      - - Lot35
+        - 6
+      items:
+        type: array
+        example:
+        - Lot31
+        - 5
+        items:
+          anyOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: array
+          - type: object
+    AssetReference:
+      type: object
+      properties:
+        contentType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+        name:
+          type: string
+        owner:
+          type: string
+        sharing:
+          type: string
+          description: The sharing options for an asset.
+          enum:
+          - private
+          - public
+        type:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    AssetReferenceRequest:
+      type: object
+      description: The asset reference request.
+      properties:
+        description:
+          type: string
+          description: The description of the asset
+          example: My first uploaded asset
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+          description: Freeform metadata for the asset
+        name:
+          type: string
+          description: The name of the asset
+          example: Gopo's recipe
+        sharing:
+          type: string
+          description: The sharing options for an asset
+          enum:
+          - private
+          - public
+          example: private
+        type:
+          type: string
+          description: The type of the asset
+          example: tdbbFlowRecipe
+      required:
+      - name
+      - type
+    AssetReferenceUpdateRequest:
+      type: object
+      description: Request to update an asset reference
+      properties:
+        description:
+          type: string
+          description: A brief description of the asset
+          example: Recipe for flow configuration
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+          description: Freeform metadata for the asset
+        name:
+          type: string
+          description: The name of the asset
+          example: my-recipe.json
+        sharing:
+          type: string
+          description: The sharing options for the asset
+          enum:
+          - private
+          - public
+        type:
+          type: string
+          description: The type of the asset
+          example: tdbbFlowRecipe
+    ComputeJobIngestionError:
+      type: object
+      description: Describes compute job related data ingestion error
+      properties:
+        errorCode:
+          type: string
+          description: Error code returned by plugin
+        errorMessage:
+          type: string
+          description: Error message
+        jobId:
+          type: string
+          description: Unique identifier of compute job
+        performanceDomain:
+          type: string
+          description: Performance domain of the job
+    ContextData:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Context type name
+          example: exposureprocessjob_equipment_equipmentid
+        values:
+          type: array
+          items:
+            type:
+            - string
+            - number
+            - boolean
+            - array
+            - object
+            description: List of context values
+            example:
+            - null
+            - "1312"
+            - "1314"
+      required:
+      - key
+    ContextResponse:
+      type: object
+      properties:
+        contexts:
+          type: array
+          description: List of context data
+          items:
+            $ref: "#/components/schemas/ContextData"
+    DataIngestionErrors:
+      type: object
+      description: Data ingestion errors grouped by job type
+      properties:
+        computeJobs:
+          type: array
+          description: Errors related to compute jobs
+          items:
+            $ref: "#/components/schemas/ComputeJobIngestionError"
+        processJobs:
+          type: array
+          description: Errors related to process jobs
+          items:
+            $ref: "#/components/schemas/ProcessJobIngestionError"
+    DataResponse:
+      type: object
+      properties:
+        columnHeaders:
+          type: array
+          description: The column headers of the data
+          items:
+            type: string
+        data:
+          $ref: "#/components/schemas/AnyTabularType"
+          description: The literal 'dataset' json value returned from PDS
+      required:
+      - columnHeaders
+      - data
+    DataSelection:
+      type: object
+      properties:
+        jobTriplets:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobTriplet"
+        performanceDomainIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+    DataSelectionResponse:
+      type: object
+      description: Response for data selection update containing ingestion state
+      properties:
+        dataIngestion:
+          $ref: "#/components/schemas/WorkspaceDataIngestion"
+          description: The data ingestion progress after the data selection update
+    DatabaseCreationRequest:
+      type: object
+      properties:
+        tables:
+          type: array
+          items:
+            $ref: "#/components/schemas/Table"
+            description: Tables to load into the database
+          minItems: 1
+      required:
+      - tables
+    ErrorID:
+      type: string
+      enum:
+      - ANALYTICS_FACADE.ASSET.UPLOAD_ERROR
+      - ANALYTICS_FACADE.ASSET.NOT_FOUND
+      - ANALYTICS_FACADE.ASSET.RETRIEVE_ERROR
+      - ANALYTICS_FACADE.ASSET.DELETE_ERROR
+      - ANALYTICS_FACADE.LINDA.CONTEXT_DATA_ERROR
+      - ANALYTICS_FACADE.LINDA.FLOW_STATUS_ERROR
+      - ANALYTICS_FACADE.LINDA.GET_DATA_ERROR
+      - ANALYTICS_FACADE.LINDA.FLOW_START_ERROR
+      - ANALYTICS_FACADE.INVENTORY.GET_DSP_ERROR
+      - ANALYTICS_FACADE.INVENTORY.GET_TABLE_DSP_ERROR
+      - ANALYTICS_FACADE.INVENTORY.CREATE_DRC_ERROR
+      - ANALYTICS_FACADE.INVENTORY.DELETE_DRC_ERROR
+      - ANALYTICS_FACADE.INVENTORY.GET_INGESTION_PROGRESS_ERROR
+      - ANALYTICS_FACADE.INVENTORY.TRIGGER_INGESTION_ERROR
+      - ANALYTICS_FACADE.INVENTORY.POST_INGESTION_CANCEL_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.CREATE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.DELETE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.GET_WORKSPACE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.UPDATE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.NO_DATA_SELECTION
+      - ANALYTICS_FACADE.WORKSPACE.NO_APPLICATION_STATE
+      - ANALYTICS_FACADE.WORKSPACE.PUT_DATABASE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.DELETE_DATABASE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.PUT_DATABASE_TABLE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.DELETE_DATABASE_TABLE_ERROR
+      - ANALYTICS_FACADE.WORKSPACE.NO_PROCESSING_INSTANCE
+      - ANALYTICS_FACADE.WORKSPACE.NOT_FOUND
+      - ANALYTICS_FACADE.WORKSPACE.BLOB_NOT_FOUND
+      - ANALYTICS_FACADE.REQUEST.UNAUTHORIZED
+      - ANALYTICS_FACADE.REQUEST.INTERNAL_SERVER_ERROR
+      - ANALYTICS_FACADE.REQUEST.INVALID_FIELD
+      - ANALYTICS_FACADE.REQUEST.VALIDATION_FAILED
+      - ANALYTICS_FACADE.REQUEST.MISSING_REQUEST_HEADER
+      - ANALYTICS_FACADE.REQUEST.GATEWAY_ACCESS_DENIED
+      - ANALYTICS_FACADE.USER.VALIDATE_USER_TOKEN_ERROR
+      - ANALYTICS_FACADE.USER.USER_LOGOUT_ERROR
+      - ANALYTICS_FACADE.USER.USER_AUTHENTICATE_ERROR
+      - ANALYTICS_FACADE.SESSION.GET_SESSION_ERROR
+      - ANALYTICS_FACADE.SESSION.EXTEND_SESSION_ERROR
+      - ANALYTICS_FACADE.DATABASE.REGISTER_TABLE_STORED_ERROR
+      - ANALYTICS_FACADE.DATABASE.REFRESH_ERROR
+      - ANALYTICS_FACADE.DATABASE.REFRESH_IN_PROGRESS
+      - ANALYTICS_FACADE.PROCESSING.PROCESSING_COMMAND_ERROR
+      - ANALYTICS_FACADE.PROCESSING_DATA.CREATE_DRC_ERROR
+      - ANALYTICS_FACADE.PROCESSING_DATA.DELETE_DRC_ERROR
+      - ANALYTICS_FACADE.PROCESSING_DATA.CONSUME_DATASET_ERROR
+      - ANALYTICS_FACADE.PROCESSING_DATA.LOAD_DATA_ERROR
+      - ANALYTICS_FACADE.LANA_DI.GET_DATA_ENTITLEMENT_ERROR
+      - ANALYTICS_FACADE.LANA_DI.GET_WS_LIMIT_ERROR
+      - ANALYTICS_FACADE.LANA_DI.USER_NOT_FOUND
+    Filter:
+      type: object
+      description: The filter list.
+      properties:
+        centricity:
+          type: string
+          description: The centricity.
+          example: MEASURE_CENTRIC
+          minLength: 1
+        exposureProcessJob:
+          $ref: "#/components/schemas/ProcessJob"
+        lisJobId:
+          type: string
+          description: The LIS job id.
+          example: computeJob-id1
+        measureProcessJob:
+          $ref: "#/components/schemas/ProcessJob"
+        performanceDomain:
+          type: string
+          description: The performance domain.
+          example: OVERLAY
+          minLength: 1
+      required:
+      - centricity
+      - performanceDomain
+    FlowExecutionRequest:
+      type: object
+      properties:
+        settings:
+          type: array
+          description: List of flow settings
+          items:
+            $ref: "#/components/schemas/FlowSetting"
+    FlowSetting:
+      type: object
+      properties:
+        componentId:
+          type: string
+          description: The settings component id of a flow
+          example: ee510538-f165-4419-847a-ad639f3e7b5c
+        value:
+          type:
+          - string
+          - number
+          - boolean
+          - array
+          - object
+          description: The setting value
+          example: 3
+      required:
+      - componentId
+      - value
+    FlowStatusResponse:
+      type: object
+      properties:
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: The literal flow details json object
+          example:
+            errorID: PRP.FLOW.MULTIPLE_IMAGE_SIZES_DATA_ERROR
+        instanceId:
+          type: string
+          description: The flow instance id
+          example: 8e182a41-9377-4682-b96a-82e434db1ca7
+        percentage:
+          type: number
+          format: double
+          description: The flow percentage
+          example: 10.5
+        status:
+          type: string
+          description: The flow execution state
+          example: EXECUTING
+      required:
+      - percentage
+      - status
+    JobTriplet:
+      type: object
+      description: The job triplet.
+      properties:
+        exposureProcessJobId:
+          type: integer
+          format: int64
+          description: The Exposure job id
+        lisJobId:
+          type: integer
+          format: int64
+          description: The LIS job id
+        measureProcessJobId:
+          type: integer
+          format: int64
+          description: The Measure job id
+    JsonNode: {}
+    NotificationReadRequest:
+      type: object
+      description: The notification read request.
+      properties:
+        notificationIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+            description: IDs of the notifications that should be marked as read.
+            example: 223e4567-e89b-12d3-a456-426614174000
+          minItems: 1
+      required:
+      - notificationIds
+    NotificationRequest:
+      type: object
+      description: The notification request.
+      properties:
+        applicationId:
+          type: string
+          description: ID of the application that created the notification.
+          example: example-application
+          minLength: 1
+        body:
+          type: string
+          description: The message to be displayed to the user.
+          example: Task finished successfully
+          minLength: 1
+        linkPath:
+          type: string
+          description: Path that is navigated towards when user clicks the notification.
+          example: /wr/application
+        title:
+          type: string
+          description: Optional title shown at the top of the notification.
+          example: Successful task
+        type:
+          $ref: "#/components/schemas/NotificationType"
+          description: Determines the visual representation of the notification.
+          example: info
+        userId:
+          type: string
+          description: ID of the user to whom the notification is sent.
+          example: user1
+          minLength: 1
+        workspaceId:
+          type: string
+          format: uuid
+          description: ID of the relevant workspace.
+          example: d7cd1286-b14f-43fc-91f6-05bb32b74edd
+      required:
+      - applicationId
+      - body
+      - type
+      - userId
+    NotificationResponse:
+      type: object
+      description: The notification response list item.
+      properties:
+        applicationId:
+          type: string
+          description: ID of the application that created the notification.
+          example: example-application
+        body:
+          type: string
+          description: The message to be displayed to the user.
+          example: Task finished successfully
+        createdAt:
+          type: integer
+          format: int64
+          description: Notification creation timestamp expressed as epoch milliseconds.
+          example: 1776688800000
+        id:
+          type: string
+          format: uuid
+          description: Notification identifier.
+          example: d7cd1286-b14f-43fc-91f6-05bb32b74edd
+        linkPath:
+          type: string
+          description: Path that is navigated towards when user clicks the notification.
+          example: /wr/application
+        title:
+          type: string
+          description: Optional title shown at the top of the notification.
+          example: Successful task
+        type:
+          $ref: "#/components/schemas/NotificationType"
+          description: Determines the visual representation of the notification.
+          example: info
+        unread:
+          type: boolean
+          description: Indicates whether the notification is unread.
+          example: true
+      required:
+      - applicationId
+      - body
+      - createdAt
+      - id
+      - type
+      - unread
+    NotificationType:
+      type: string
+      description: Visual type of notification.
+      enum:
+      - success
+      - warning
+      - error
+      - info
+    ProblemMessage:
+      type: object
+      description: Standard error message format
+      properties:
+        errorID:
+          type: string
+          $ref: "#/components/schemas/ErrorID"
+          description: Error id
+          example: ANALYTICS_FACADE.ERROR_ID
+          minLength: 1
+        problems:
+          type: array
+          description: "List of associated problems, in case of multiple problems\
+            \ such as with validation errors"
+          items:
+            $ref: "#/components/schemas/ProblemMessage"
+        status:
+          type: integer
+          format: int32
+          description: Error status code
+          example: 400
+        title:
+          type: string
+          description: Readable Error Message
+          example: Something went wrong
+      required:
+      - errorID
+      - title
+    ProcessJob:
+      type: object
+      description: The exposure or measure process job.
+      properties:
+        equipmentId:
+          type: string
+          description: The equipmentId.
+          example: m1001
+          minLength: 1
+        lotId:
+          type: string
+          description: The lotId.
+          example: "1312"
+          minLength: 1
+        startTime:
+          type: integer
+          format: int64
+          description: The lotStartTime in epoch milliseconds.
+          example: 1743511320779
+      required:
+      - equipmentId
+      - lotId
+      - startTime
+    ProcessJobIngestionError:
+      type: object
+      description: Describes exposure/measure process job related data ingestion error
+      properties:
+        errorCode:
+          type: string
+          description: Error code returned by plugin
+        errorMessage:
+          type: string
+          description: Error message
+        performanceDomain:
+          type: string
+          description: Performance domain of the job
+        processJobId:
+          $ref: "#/components/schemas/JsonNode"
+          description: Unique identifier of Exposure/Measure process job
+    ProcessingInstanceRequest:
+      type: object
+      description: Request to execute Processing Instance
+      properties:
+        displayName:
+          type: string
+          description: Optional user-friendly name for the processing instance
+        notificationsEnabled:
+          type: boolean
+          description: "Enable notifications when processing completes (default: false)"
+        notificationsLink:
+          type: string
+          description: Optional link path to include in completion notifications
+        serviceName:
+          type: string
+          description: Name of service to instantiate
+          example: shadowmode
+        serviceVersion:
+          type: string
+          description: Version of service to instantiate
+          example: 1.0.0
+        settings:
+          type: string
+          description: Optional settings to apply
+        source:
+          type: string
+          description: Optional source statement
+      required:
+      - serviceName
+      - serviceVersion
+    ProcessingInstanceResponse:
+      type: object
+      description: Processing Instance DTO
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: The creation date of processing instance
+        displayName:
+          type: string
+          description: Optional user-friendly name for the processing instance
+        finishedAt:
+          type: string
+          format: date-time
+          description: The finished date of processing instance
+        id:
+          type: string
+          format: uuid
+          description: The processing instance id
+          minLength: 1
+        notificationsEnabled:
+          type: boolean
+          description: Whether notifications are enabled for processing completion
+        notificationsLink:
+          type: string
+          description: Optional link path to include in completion notifications
+        progressMessage:
+          type: string
+          description: The message associated with progress of processing instance
+        progressPercentage:
+          type: number
+          format: double
+          description: The progress percentage of processing instance
+        serviceName:
+          type: string
+          description: Name of processing service
+          example: shadowmode
+        serviceVersion:
+          type: string
+          description: Version of processing service
+          example: 1.0.0
+        startedAt:
+          type: string
+          format: date-time
+          description: The started date of processing instance
+        status:
+          $ref: "#/components/schemas/ProcessingStatus"
+          description: Status of processing instance
+          example: running
+        workspaceId:
+          type: string
+          format: uuid
+          description: Id of workspace associated with this processing instance
+          example: ef26875e-dfb3-4b9d-895f-321a9f88a18d
+      required:
+      - id
+      - serviceName
+      - serviceVersion
+      - workspaceId
+    ProcessingStatus:
+      type: string
+      description: "Possible statuses that an instance (i.e. its underlying Kubernetes\
+        \ job) may be in. State transitions: started -> pending (optional) -> running\
+        \ -> succeeded/failed/stopped"
+      enum:
+      - started
+      - pending
+      - running
+      - succeeded
+      - failed
+      - stopped
+    Table:
+      type: object
+      properties:
+        columns:
+          type: array
+          description: Columns to add to the database table. If no columns are specified
+            then all columns from the schema will be added to the database table.
+          items:
+            type: string
+        tableName:
+          type: string
+          description: "Table identifier. The format is like: <performanceDomain>.<name>,\
+            \ where <name> corresponds with the name of the table schema in the inventory\
+            \ service. Note that <performanceDomain> is case sensitive (likely uppercase).\
+            \ Also note that for the SQL table name all dots are replaced by underscores."
+          example: OVERLAY.association.data (for which a database table will be created
+            with the name 'overlay_association_data')
+          minLength: 1
+        tableVersion:
+          type: string
+          description: Semantic version of the table schema.
+          example: 2.1.0
+          minLength: 1
+      required:
+      - tableName
+      - tableVersion
+    UserAuthenticationRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          description: The password
+          example: guest
+          minLength: 1
+        username:
+          type: string
+          description: The username
+          example: guest
+          minLength: 1
+      required:
+      - password
+      - username
+    UserAuthenticationResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: The jwt token
+          example: eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJzdWIiOiAiMTIzNDU2Nzg5MCJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+      required:
+      - token
+    WorkspaceBlob:
+      type: object
+      properties:
+        contentType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+        name:
+          type: string
+        type:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        workspaceId:
+          type: string
+          format: uuid
+    WorkspaceBlobRequest:
+      type: object
+      description: The workspace blob request.
+      properties:
+        description:
+          type: string
+          description: The description of the blob
+          example: My workspace data
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+          description: Metadata for the blob
+        name:
+          type: string
+          description: The name of the blob
+          example: my-data.json
+        type:
+          type: string
+          description: The type of the blob
+      required:
+      - name
+      - type
+    WorkspaceBlobUpdateRequest:
+      type: object
+      description: Request to update a workspace blob
+      properties:
+        description:
+          type: string
+          description: A brief description of the blob
+          example: Updated workspace data
+        metadata:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/JsonNode"
+          description: Freeform metadata for the blob
+        name:
+          type: string
+          description: The name of the blob
+          example: my-data.json
+        type:
+          type: string
+          description: The type of the blob
+      required:
+      - type
+    WorkspaceConnectionInfo:
+      type: object
+      properties:
+        databaseEndpoint:
+          type: string
+          description: How to reach database inside cluster in <host>:<port> format
+          example: starrocks-hdfs-fe-service.analytics-fnd-query-engine-starrocks-prod.svc.cluster.local:9030
+        password:
+          type: string
+          description: The password
+          example: pw_89377c23_6333_4295_91ee_f567a9559712
+        userName:
+          type: string
+          description: The user
+          example: user_89377c23_6333_4295_91ee_f567a9559712
+      required:
+      - databaseEndpoint
+      - password
+      - userName
+    WorkspaceCreationRequest:
+      type: object
+      properties:
+        applicationId:
+          type: string
+          description: The application id
+          example: LINDA
+        filterList:
+          type: array
+          items:
+            $ref: "#/components/schemas/Filter"
+      required:
+      - applicationId
+      - filterList
+    WorkspaceCreationResponse:
+      type: object
+      description: The workspace creation response.
+      properties:
+        hasProxiedData:
+          type: boolean
+          description: Indicates if there is proxy data to be ingested
+          example: false
+        id:
+          type: string
+          format: uuid
+          description: The workspace id
+          example: d7cd1286-b14f-43fc-91f6-05bb32b74edd
+        size:
+          type: integer
+          format: int32
+          description: The size of DRC
+          example: 100
+      required:
+      - hasProxiedData
+      - id
+      - size
+    WorkspaceDataIngestion:
+      type: object
+      description: Simplified data ingestion state for a workspace
+      properties:
+        errors:
+          $ref: "#/components/schemas/DataIngestionErrors"
+          description: Ingestion errors grouped by job type
+        ingestionPercentage:
+          type: integer
+          format: int32
+          description: "Ingestion progress as a percentage (0-100). Calculated as\
+            \ ((initialProxyCount - currentProxy) / initialProxyCount) * 100, where\
+            \ initialProxyCount is the number of proxy partitions at the time ingestion\
+            \ was triggered. Null when initialProxyCount is unavailable (e.g. ingestion\
+            \ has not been triggered yet)."
+        ingestionTriggeredAt:
+          type: string
+          format: date-time
+          description: The timestamp at which data ingestion was triggered. Used to
+            display elapsed time. Null when ingestion has not been triggered yet.
+        status:
+          type: string
+          description: The current ingestion status
+          enum:
+          - NOT_INITIATED
+          - INITIATED
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+          - CANCELED
+    WorkspaceRequest:
+      type: object
+      properties:
+        applicationId:
+          type: string
+          description: The application id
+          minLength: 1
+        summary:
+          type:
+          - string
+          - "null"
+          description: The summary of this workspace
+        title:
+          type:
+          - string
+          - "null"
+          description: The title of this workspace
+      required:
+      - applicationId
+    WorkspaceResponse:
+      type: object
+      properties:
+        applicationId:
+          type: string
+          description: The application id
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+          description: The workspace's creation date
+        id:
+          type: string
+          format: uuid
+          description: The workspace id
+          minLength: 1
+        summary:
+          type:
+          - string
+          - "null"
+          description: The summary of this workspace
+        title:
+          type:
+          - string
+          - "null"
+          description: The title of this workspace
+        updatedAt:
+          type: string
+          format: date-time
+          description: The workspace's updated date
+      required:
+      - applicationId
+      - id
+  securitySchemes:
+    bearerHttpAuthentication:
+      bearerFormat: JWT
+      description: Bearer token using a JWT
+      name: bearerHttpAuthentication
+      scheme: bearer
+      type: http

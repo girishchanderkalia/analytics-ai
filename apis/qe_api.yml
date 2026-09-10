@@ -1,0 +1,378 @@
+openapi: 3.1.0
+info:
+  description: API specification for the foundation-data-query-engine service.
+  title: Foundation Data Query Engine Service REST API
+  version: '0.0.1-SNAPSHOT'
+servers:
+- description: local development server
+  url: http://localhost:8080
+tags:
+- description: REST entry point for Database Services
+  name: Database Service
+paths:
+  /v1/database/{databaseName}:
+    delete:
+      description: "Deletes a database for the provided name. If the database does\
+        \ not exist, nothing happens."
+      operationId: deleteDatabase
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      responses:
+        "204":
+          description: Database deleted or did not exist
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+    get:
+      description: Checks if a database for the provided name exists.
+      operationId: checkDatabaseExists
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      responses:
+        "204":
+          description: Database exists
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: Database not found
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.REQUEST.DATABASE_NOT_FOUND
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Database not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+    put:
+      description: Creates a database with the given name and a user with provided
+        credentials.
+      operationId: createDatabase
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+        required: true
+      responses:
+        "204":
+          description: Database and user created successfully
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "409":
+          content:
+            application/problem+json:
+              example:
+                title: Database already exists
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.REQUEST.DATABASE_DUPLICATE
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Database already exists
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+  /v1/database/{databaseName}/table/{tableName}:
+    delete:
+      description: "Deletes the provided table from the database with the provided\
+        \ name. If the table does not exist, nothing happens."
+      operationId: deleteTable
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      - description: Table name
+        in: path
+        name: tableName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,1024}$"
+      responses:
+        "204":
+          description: Table deleted or did not exist
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+  /v1/database/{databaseName}/tables:
+    get:
+      description: Returns the table names in the database with the provided name.
+      operationId: getTableNames
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+              - table1
+              - table2
+              schema:
+                type: string
+          description: List of table names
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "404":
+          content:
+            application/problem+json:
+              example:
+                title: Database not found
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.REQUEST.DATABASE_NOT_FOUND
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Database not found
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+    put:
+      description: Creates the provided tables in the database with the provided name.
+      operationId: createTables
+      parameters:
+      - description: Database name
+        in: path
+        name: databaseName
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,256}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              description: Table schemas
+              items:
+                $ref: "#/components/schemas/TableSchema"
+        required: true
+      responses:
+        "204":
+          description: Tables created successfully
+        "400":
+          content:
+            application/problem+json:
+              example:
+                title: Validation failure
+                errorID: FOUNDATION_DATA_QUERY_ENGINE.REQUEST.VALIDATION_FAILED
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Input validation failed
+        "500":
+          content:
+            application/problem+json:
+              example:
+                title: Internal server error
+                errorID: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.INTERNAL.INTERNAL_SERVER_ERROR
+              schema:
+                $ref: "#/components/schemas/ProblemMessage"
+          description: Internal Server Error
+      tags:
+      - Database Service
+components:
+  schemas:
+    AbstractSimpleType: {}
+    Credentials:
+      type: object
+      description: User credentials
+      properties:
+        password:
+          type: string
+          pattern: "^[a-zA-Z0-9_]{0,128}$"
+        username:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z0-9_]{1,128}$"
+      required:
+      - password
+      - username
+    ProblemMessage:
+      type: object
+      description: Standard error message format
+      properties:
+        errorID:
+          type: string
+          $ref: "#/components/schemas/ErrorID"
+          description: Error id
+          example: FOUNDATION_DATA_QUERY_ENGINE_SERVICE.ERROR_ID
+          minLength: 1
+        status:
+          type: integer
+          format: int32
+          description: Error status code
+          example: 400
+        title:
+          type: string
+          description: Readable Error Message
+          example: Something went wrong
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional error variables
+      required:
+      - errorID
+      - title
+    TableColumn:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,1024}$"
+        type:
+          $ref: "#/components/schemas/AbstractSimpleType"
+      required:
+      - name
+      - type
+    TableSchema:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableColumn"
+          minItems: 1
+        name:
+          type: string
+          minLength: 1
+          pattern: "^[a-zA-Z_][a-zA-Z0-9_]{1,1024}$"
+        partitionColumns:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        partitionPaths:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        rootPath:
+          type: string
+          minLength: 1
+      required:
+      - columns
+      - name
+      - partitionColumns
+      - partitionPaths
+      - rootPath
+  securitySchemes:
+    token:
+      bearerFormat: JWT
+      description: Bearer token using a JWT
+      scheme: bearer
+      type: http
