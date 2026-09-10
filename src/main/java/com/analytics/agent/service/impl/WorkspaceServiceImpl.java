@@ -15,9 +15,9 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     @Override
     public String createWorkspace() {
-        String id = "WS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        workspaces.put(id, null);
-        return id;
+        // ConcurrentHashMap rejects null values, so the entry is created only once
+        // filters arrive
+        return "WS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     @Override

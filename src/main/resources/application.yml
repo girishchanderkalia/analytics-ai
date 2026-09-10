@@ -1,11 +1,17 @@
+asml:
+  ai:
+    base-url: https://platform.ai.asml.com
+    key-vault-url: https://ssa-prd-proj-15528-01-kv.vault.azure.net/
+    secret-name: ssa-ai-key
+    deployment: ${SSA_AI_DEPLOYMENT:mistral-large-3-ssa}
+    api-version: ${SSA_AI_API_VERSION:2024-10-21}
+    temperature: 0.2
+
 spring:
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
-      chat:
-        options:
-          model: gpt-4o
-          temperature: 0.2
+      # Satisfies the starter's auto-config; the real credential is on asml.ai.api-key
+      api-key: unused
 
 server:
   port: 8080
