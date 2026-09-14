@@ -4,5 +4,6 @@ langchain-openai>=1.6
 fastapi>=0.141
 uvicorn>=0.52
 pydantic-settings>=2.15
+plotly>=7.0
 azure-identity>=1.25
 azure-keyvault-secrets>=4.11

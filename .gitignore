@@ -1,5 +1,9 @@
 .venv/
 __pycache__/
 *.pyc
-checkpoints.sqlite
+checkpoints.sqlite*
+agent_sessions.sqlite*
+.opo-monitoring.pid
+.opo-monitoring.port
+.opo-monitoring.log
 .vscode/

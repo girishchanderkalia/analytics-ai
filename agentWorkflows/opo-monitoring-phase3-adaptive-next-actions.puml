@@ -1,0 +1,158 @@
+@startuml OPO Monitoring Phase 3 - Adaptive Next Actions
+
+' Phase 3 adds model-proposed, governed, and optionally human-approved next actions.
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontColor #0F172A
+skinparam ArrowColor #475569
+skinparam partitionBackgroundColor #F8FAFC
+skinparam partitionBorderColor #94A3B8
+skinparam partitionFontColor #0F172A
+skinparam partitionFontSize 14
+skinparam activity {
+  BackgroundColor #E0F2FE
+  BorderColor #1D4ED8
+  FontColor #0F172A
+  DiamondBackgroundColor #FEF3C7
+  DiamondBorderColor #B45309
+  StartColor #16A34A
+  EndColor #DC2626
+  BarColor #2563EB
+}
+skinparam note {
+  BackgroundColor #F1F5F9
+  BorderColor #64748B
+  FontColor #0F172A
+}
+
+start
+
+partition "Application UI - OPO Monitoring UI" {
+  :Show current finding,
+  evidence, and limitations;
+  :Ask whether to continue
+  diagnostic investigation;
+}
+
+if (User wants next diagnostic step?) then (yes)
+  partition "Model" {
+    :Propose the next diagnostic action
+    from the current evidence;
+    :Explain why the action is useful;
+    :Identify expected evidence;
+  }
+
+  note right
+    Example model output:
+    {
+      next_action: compare_same_layer_across_machines,
+      reason: "Test whether the issue is machine-specific",
+      required_capability: query_engine.compare_wafer_data,
+      expected_evidence: [machine_effect, layer_effect]
+    }
+  end note
+
+  partition "OPO Monitoring Service - Application-owned workflow" {
+    :Validate action against application allowlist;
+    :Validate required parameters and filters;
+    :Check maximum investigation depth;
+  }
+
+  if (Action is allowed and parameters valid?) then (yes)
+    if (Action has side effects?) then (yes)
+      partition "Application UI - OPO Monitoring UI" {
+        :Show action, reason,
+        required capability, and impact;
+        :Ask user for approval;
+      }
+
+      if (User approves action?) then (yes)
+        :Record human_decision;
+      else (no)
+        :Record rejected action;
+        stop
+      endif
+    else (no)
+      :Record read-only action approval;
+    endif
+
+    partition "Analytics Foundation - Governed capability registry" {
+      :Check permission and capability version;
+      :Invoke approved query or processing capability;
+      :Record tool invocation and result;
+    }
+
+    partition "Analytics Foundation - Query Engine capability" {
+      :Return comparison or diagnostic data;
+    }
+
+    partition "OPO Monitoring Service - Application-owned analysis" {
+      :Calculate new comparison results;
+      :Add evidence to session;
+      :Update investigation state;
+    }
+
+    partition "Model" {
+      :Explain the new evidence;
+      :Update hypotheses and confidence;
+      :Recommend another action or finish;
+    }
+
+    note right
+      Model input:
+      {
+        previous_finding: {...},
+        new_evidence: [EV-201, EV-202],
+        remaining_allowed_actions: [...]
+      }
+
+      Model output:
+      {
+        finding_update: "...",
+        confidence: medium,
+        next_action: "finish",
+        rationale: "Evidence is sufficient for this scope"
+      }
+    end note
+
+    if (Another action recommended?) then (yes)
+      :Return to next-action approval;
+    else (finish)
+      partition "Application UI - OPO Monitoring UI" {
+        :Show updated finding,
+        evidence, limitations,
+        and recommended next actions;
+      }
+      stop
+    endif
+  else (no)
+    partition "Application UI - OPO Monitoring UI" {
+      :Explain that the proposed action
+      is unavailable or invalid;
+      :Show safe alternatives;
+    }
+    stop
+  endif
+else (no)
+  partition "Model" {
+    :Summarize current evidence
+    and recommended next actions;
+  }
+  partition "Application UI - OPO Monitoring UI" {
+    :Show final investigation result;
+  }
+  stop
+endif
+
+note right
+  Phase 3 boundary:
+  - Model proposes and explains next actions.
+  - Application validates workflow and parameters.
+  - Capability registry enforces permissions and audit.
+  - User approves side-effecting actions.
+  - Model cannot invoke arbitrary tools or bypass governance.
+end note
+
+@enduml

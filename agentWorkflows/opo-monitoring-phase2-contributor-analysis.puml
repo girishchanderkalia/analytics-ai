@@ -1,0 +1,117 @@
+@startuml OPO Monitoring Phase 2 - Contributor Analysis
+
+' Phase 2 extends the completed OPO investigation with deterministic contributor analysis.
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontColor #0F172A
+skinparam ArrowColor #475569
+skinparam partitionBackgroundColor #F8FAFC
+skinparam partitionBorderColor #94A3B8
+skinparam partitionFontColor #0F172A
+skinparam partitionFontSize 14
+skinparam activity {
+  BackgroundColor #E0F2FE
+  BorderColor #1D4ED8
+  FontColor #0F172A
+  DiamondBackgroundColor #FEF3C7
+  DiamondBorderColor #B45309
+  StartColor #16A34A
+  EndColor #DC2626
+  BarColor #2563EB
+}
+skinparam note {
+  BackgroundColor #F1F5F9
+  BorderColor #64748B
+  FontColor #0F172A
+}
+
+start
+
+partition "Application UI - OPO Monitoring UI" {
+  :User approves threshold,
+  outlier, and registration;
+  :Display trend and wafer evidence;
+}
+
+partition "OPO Monitoring Service - Application-owned workflow" {
+  :Load selected outlier,
+  filters, and wafer evidence;
+  :Define contributor dimensions;
+}
+
+partition "Analytics Foundation - Query Engine capability" {
+  :Read comparison data for:
+  machine, lot, layer, product,
+  measurement equipment, and time window;
+}
+
+partition "OPO Monitoring Service - Application-owned analysis" {
+  :Calculate deterministic comparisons;
+  :Calculate effect size and sample counts;
+  :Rank candidate contributors;
+  :Attach evidence IDs to each contributor;
+}
+
+note right
+  Example deterministic contributor result:
+  {
+    dimension: machine,
+    value: NXE3600,
+    effect: 0.22,
+    sample_count: 32,
+    evidence_id: EV-101
+  }
+end note
+
+partition "Model" {
+  :Explain and rank contributors
+  using supplied comparison results;
+  :Separate supporting evidence
+  from missing or contradicting evidence;
+  :Return structured hypotheses;
+}
+
+note right
+  Model input:
+  {
+    candidate_contributors: [...],
+    selected_outlier: {...},
+    evidence_ids: [EV-101, EV-102]
+  }
+
+  Model output:
+  {
+    hypotheses: [...],
+    most_likely_contributor: "machine",
+    confidence: medium,
+    supporting_evidence: [EV-101],
+    limitations: [...],
+    next_check: "Compare same layer across machines"
+  }
+end note
+
+partition "OPO Monitoring Service - Application-owned workflow" {
+  :Validate structured hypotheses;
+  :Record contributor analysis,
+  evidence, and model timing;
+}
+
+partition "Application UI - OPO Monitoring UI" {
+  :Show contributor ranking;
+  :Show confidence and limitations;
+  :Show evidence-linked hypotheses;
+  :Show suggested next diagnostic check;
+}
+
+stop
+
+note right
+  Phase 2 boundary:
+  - Application calculates contributors and effect sizes.
+  - Model explains, ranks, and qualifies hypotheses.
+  - Model does not calculate correlations or claim confirmed root cause.
+end note
+
+@enduml
