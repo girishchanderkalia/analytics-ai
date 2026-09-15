@@ -1,5 +1,6 @@
 import uuid
 import time
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -11,16 +12,35 @@ from langgraph.types import Command
 from plotly.offline import get_plotlyjs
 from pydantic import BaseModel
 
-from AnalyticsFoundation import session_memory
+from AnalyticsFoundation import datawarehouse, lanadb_query, session_memory
 from AnalyticsFoundation.capability_registry import list_capabilities
 from AnalyticsFoundation.config import get_settings as get_platform_settings
+from AnalyticsFoundation.model_gateway import get_llm
 from ApplicationUI.analytics_agents.opo_monitoring_service import services
 from ApplicationUI.analytics_agents.opo_monitoring_service.application_workflow import build_graph
+
+log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parents[2] / "opo_monitoring_ui" / "static"
 
 app = FastAPI(title="OPO Monitoring Service")
 session_memory.configure_store(get_platform_settings().session_db)
+
+
+@app.on_event("startup")
+def _warm_caches() -> None:
+    """Pay the one-time model-credential fetch and mock dataset load costs now,
+    not on the first user request (Key Vault auth alone can take several seconds,
+    and unpacking the wafer dataset the first time takes a couple more)."""
+    try:
+        get_llm()
+    except Exception:
+        log.warning("Could not pre-warm the model client", exc_info=True)
+    try:
+        lanadb_query.query_trend_rows()
+        datawarehouse.query_wafer_rows()
+    except Exception:
+        log.warning("Could not pre-warm mock datasets", exc_info=True)
 
 
 @app.middleware("http")

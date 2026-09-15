@@ -22,7 +22,11 @@ function setRightPanelCollapsed(collapsed) {
   );
 }
 
-const SERIES_COLOURS = ["#4c9aff", "#a371f7", "#3fb950"];
+const SERIES_COLOURS = [
+  "#4c9aff", "#a371f7", "#3fb950", "#f78166", "#e3b341",
+  "#39c5cf", "#db61a2", "#8ddb8c", "#79c0ff", "#d29922",
+  "#f47067", "#56d4dd",
+];
 const OUTLIER_COLOUR = "#f85149";
 
 const PLOT_LAYOUT = {
@@ -68,14 +72,16 @@ function drawPlot(outliers, selectedMachine) {
     };
   });
 
-  // Points matching the analyst's request, ringed in red
+  // Points matching the analyst's request, ringed in red. Keys are "index#date" (not
+  // bare dates) since several points in a series can share the same timestamp - e.g.
+  // multiple wafers from one lot - and a bare date would ring every point sharing it.
   if (flaggedByMachine.size) {
     const rings = { x: [], y: [], text: [] };
     trendSeries.forEach((s) => {
-      const dates = flaggedByMachine.get(`${s.machine}::${s.product}`);
-      if (!dates) return;
+      const keys = flaggedByMachine.get(`${s.machine}::${s.product}`);
+      if (!keys) return;
       s.points
-        .filter((p) => dates.has(p.date))
+        .filter((p, i) => keys.has(`${i}#${p.date}`))
         .forEach((p) => {
           rings.x.push(p.date);
           rings.y.push(p.kpi_value);
@@ -109,7 +115,7 @@ async function loadTrends() {
     trendSeries = (await res.json()).series;
     drawPlot(null, null);
     document.getElementById("chart-note").textContent =
-      `${trendSeries.length} series · ${trendSeries[0].points.length} days`;
+      `${trendSeries.length} series · ${trendSeries[0].points.length} points`;
   } catch (err) {
     document.getElementById("chart-note").textContent = `Could not load trends: ${err.message}`;
   }
@@ -386,154 +392,186 @@ function renderWaferMap(evidence) {
   }
 
   const anomalySet = new Set(evidence.anomalous_wafers || []);
-  const waferIds = [...new Set(rows.map((row) => row.wafer_id))];
-  const columns = Math.min(3, Math.max(1, waferIds.length));
-  const waferRows = Math.ceil(waferIds.length / columns);
+
+  // A point's true wafer coordinate is the reticle field's center plus its
+  // intrafield offset - using the intrafield offset alone collapses every field
+  // (there can be dozens tiled across the wafer) onto the same handful of points.
+  const trueX = (row) =>
+    Number(row.exposureprocessjob_waferexposureprocessjob_exposurelogicalwafer_exposedfield_field_center_x ?? 0) +
+    Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_x ?? row.position_x ?? 0);
+  const trueY = (row) =>
+    Number(row.exposureprocessjob_waferexposureprocessjob_exposurelogicalwafer_exposedfield_field_center_y ?? 0) +
+    Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_y ?? row.position_y ?? 0);
+
+  // Scale to the data instead of fixed constants, since a real wafer's field layout
+  // and overlay magnitude can both be very different from the old mock's.
+  const maxCoordMagnitude = rows.reduce((max, row) => Math.max(max, Math.abs(trueX(row)), Math.abs(trueY(row))), 0);
+  const WAFER_RADIUS = maxCoordMagnitude > 0 ? maxCoordMagnitude * 1.08 : 27;
+  const AXIS_RANGE = WAFER_RADIUS * 1.15;
+  const maxOverlayMagnitude = rows.reduce((max, row) => {
+    const magnitude = Math.max(Math.abs(Number(row.overlay_x ?? 0)), Math.abs(Number(row.overlay_y ?? 0)));
+    return Number.isFinite(magnitude) ? Math.max(max, magnitude) : max;
+  }, 0);
+  // Arrows are meant to fit within one reticle field's footprint, not scale with
+  // the whole wafer radius, so target length is a fixed fraction of field spacing.
+  const TARGET_VECTOR_LENGTH = 10;
+  const vectorScale = maxOverlayMagnitude > 0 ? TARGET_VECTOR_LENGTH / maxOverlayMagnitude : 1;
+
+  // Index once because the broad outlier preview can contain tens of thousands of
+  // points; repeatedly scanning all rows for every panel makes rendering quadratic.
+  const rowsByPanel = new Map();
+  rows.forEach((row) => {
+    const lotId = row.lot_id ?? "UNKNOWN_LOT";
+    const panelKey = `${lotId}\u0000${row.wafer_id}`;
+    const panelRows = rowsByPanel.get(panelKey);
+    if (panelRows) panelRows.push(row);
+    else rowsByPanel.set(panelKey, [row]);
+  });
+  // Organize wafers by lot - one row of wafer panels per lot, matching how a wafer
+  // analysis tool would lay out the wafers actually processed together in a lot.
+  const lotIds = [...new Set(rows.map((row) => row.lot_id ?? "UNKNOWN_LOT"))];
+  const waferIdsPerLot = new Map(
+    lotIds.map((lotId) => [lotId, [...new Set(rows.filter((row) => (row.lot_id ?? "UNKNOWN_LOT") === lotId).map((row) => row.wafer_id))]])
+  );
+  const columns = Math.max(1, ...[...waferIdsPerLot.values()].map((ids) => ids.length));
+  const gridRows = lotIds.length;
+  const showVectors = lotIds.length === 1;
+
   const traces = [];
   const annotations = [];
   const shapes = [];
   const waferLayout = {};
 
-  waferIds.forEach((waferId, index) => {
-    const axisNumber = index + 1;
-    const axisSuffix = axisNumber === 1 ? "" : axisNumber;
-    const axisRef = `x${axisSuffix}`;
-    const yAxisRef = `y${axisSuffix}`;
-    const waferRowsForPanel = rows.filter((row) => row.wafer_id === waferId);
-    const x = [];
-    const y = [];
-    const measurementX = [];
-    const measurementY = [];
-    const pointColors = [];
-    const pointText = [];
+  lotIds.forEach((lotId, rowIndex) => {
+    const waferIdsForLot = waferIdsPerLot.get(lotId);
+    waferIdsForLot.forEach((waferId, colIndex) => {
+      const panelIndex = rowIndex * columns + colIndex;
+      const axisNumber = panelIndex + 1;
+      const axisSuffix = axisNumber === 1 ? "" : axisNumber;
+      const axisRef = `x${axisSuffix}`;
+      const yAxisRef = `y${axisSuffix}`;
+      const panelRows = rowsByPanel.get(`${lotId}\u0000${waferId}`) || [];
 
-    waferRowsForPanel.forEach((row) => {
-      const px = Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_x ?? row.position_x ?? 0);
-      const py = Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_y ?? row.position_y ?? 0);
-      const ux = Number(row.overlay_x ?? 0);
-      const uy = Number(row.overlay_y ?? 0);
-      const valid = row.overlay_valid_x !== false && row.overlay_valid_y !== false;
-      if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+      // A single lot's wafer has no duplicate sites, so every real point is plotted
+      // as-is (no averaging) - averaging is only needed when multiple lots' samples
+      // land on the same physical field/site, which doesn't happen within one lot.
+      const measurementX = panelRows.map(trueX);
+      const measurementY = panelRows.map(trueY);
+      const pointColors = panelRows.map((row) => {
+        const valid = row.overlay_valid_x !== false && row.overlay_valid_y !== false;
+        return valid && anomalySet.has(waferId) ? "#f85149" : valid ? "#4c9aff" : "#667085";
+      });
+      const pointText = panelRows.map((row) => `${lotId} \u00b7 ${waferId}`);
 
-      const pointColor = valid && anomalySet.has(row.wafer_id) ? "#f85149" : valid ? "#4c9aff" : "#667085";
-      measurementX.push(px);
-      measurementY.push(py);
-      pointColors.push(pointColor);
-      pointText.push(`${row.wafer_id} / ${row.machine}`);
-      x.push(px, px + ux * 60, null);
-      y.push(py, py + uy * 60, null);
-    });
+      traces.push({
+        type: showVectors ? "scattergl" : "scatter",
+        mode: "markers",
+        x: measurementX,
+        y: measurementY,
+        xaxis: axisRef,
+        yaxis: yAxisRef,
+        marker: { size: 4, color: pointColors, opacity: 0.75 },
+        text: pointText,
+        hovertemplate: "%{text}<br>x=%{x:.2f}, y=%{y:.2f}<extra></extra>",
+        showlegend: false,
+      });
 
-    traces.push({
-      type: "scatter",
-      mode: "lines",
-      x,
-      y,
-      xaxis: axisRef,
-      yaxis: yAxisRef,
-      line: { color: "#4c9aff", width: 1.3 },
-      hoverinfo: "none",
-      showlegend: false,
-    });
-    traces.push({
-      type: "scatter",
-      mode: "markers",
-      x: measurementX,
-      y: measurementY,
-      xaxis: axisRef,
-      yaxis: yAxisRef,
-      marker: {
-        size: 6,
-        color: pointColors,
-        opacity: 0.92,
-        line: {
-          color: waferRowsForPanel.map((row) => anomalySet.has(row.wafer_id) ? "#f85149" : "rgba(0,0,0,0)"),
-          width: waferRowsForPanel.map((row) => anomalySet.has(row.wafer_id) ? 1.5 : 0),
-        },
-      },
-      text: pointText,
-      hovertemplate: "%{text}<br>x=%{x:.2f}, y=%{y:.2f}<extra></extra>",
-      showlegend: false,
-    });
-
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    const xStart = column / columns + 0.015;
-    const xEnd = (column + 1) / columns - 0.015;
-    const yEnd = 1 - row / waferRows - 0.08;
-    const yStart = 1 - (row + 1) / waferRows + 0.08;
-    const axisLayout = {
-      domain: [xStart, xEnd],
-      range: [-30, 30],
-      zeroline: false,
-      gridcolor: "#2a3441",
-      showticklabels: false,
-      fixedrange: true,
-    };
-    const yAxisLayout = {
-      domain: [yStart, yEnd],
-      range: [-30, 30],
-      zeroline: false,
-      gridcolor: "#2a3441",
-      showticklabels: false,
-      fixedrange: true,
-      scaleanchor: axisRef,
-      scaleratio: 1,
-    };
-    annotations.push({
-      x: (xStart + xEnd) / 2,
-      y: yEnd + 0.025,
-      xref: "paper",
-      yref: "paper",
-      text: `<b>${waferId}</b>${anomalySet.has(waferId) ? " · anomaly" : ""}`,
-      showarrow: false,
-      font: { color: anomalySet.has(waferId) ? "#f85149" : "#e4e8ee", size: 11 },
-    });
-    shapes.push({
-      type: "circle",
-      xref: axisRef,
-      yref: yAxisRef,
-      x0: -27,
-      y0: -27,
-      x1: 27,
-      y1: 27,
-      line: { color: "#667085", width: 1 },
-    });
-
-    waferRowsForPanel.forEach((row) => {
-      const px = Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_x ?? row.position_x ?? 0);
-      const py = Number(row.measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_y ?? row.position_y ?? 0);
-      const ux = Number(row.overlay_x ?? 0);
-      const uy = Number(row.overlay_y ?? 0);
-      const valid = row.overlay_valid_x !== false && row.overlay_valid_y !== false;
-      if (!valid || !Number.isFinite(px) || !Number.isFinite(py) || (ux === 0 && uy === 0)) return;
+      const xStart = colIndex / columns + 0.008;
+      const xEnd = (colIndex + 1) / columns - 0.008;
+      const yEnd = 1 - rowIndex / gridRows - 0.05;
+      const yStart = 1 - (rowIndex + 1) / gridRows + 0.05;
+      waferLayout[`xaxis${axisSuffix}`] = {
+        domain: [xStart, xEnd],
+        anchor: yAxisRef,
+        range: [-AXIS_RANGE, AXIS_RANGE],
+        zeroline: false,
+        gridcolor: "#2a3441",
+        showticklabels: false,
+        fixedrange: true,
+      };
+      waferLayout[`yaxis${axisSuffix}`] = {
+        domain: [yStart, yEnd],
+        anchor: "free",
+        position: 0,
+        range: [-AXIS_RANGE, AXIS_RANGE],
+        zeroline: false,
+        gridcolor: "#2a3441",
+        showticklabels: false,
+        fixedrange: true,
+      };
       annotations.push({
-        x: px + ux * 60,
-        y: py + uy * 60,
-        ax: px,
-        ay: py,
+        x: 0,
+        y: AXIS_RANGE * 0.96,
         xref: axisRef,
         yref: yAxisRef,
-        axref: axisRef,
-        ayref: yAxisRef,
-        showarrow: true,
-        arrowhead: 3,
-        arrowsize: 0.8,
-        arrowwidth: anomalySet.has(row.wafer_id) ? 1.5 : 1,
-        arrowcolor: anomalySet.has(row.wafer_id) ? "#f85149" : "#4c9aff",
-        text: "",
+        text: `<b>${waferId}</b>${anomalySet.has(waferId) ? " · anomaly" : ""}`,
+        showarrow: false,
+        font: { color: anomalySet.has(waferId) ? "#f85149" : "#e4e8ee", size: 11 },
       });
+      shapes.push({
+        type: "circle",
+        xref: axisRef,
+        yref: yAxisRef,
+        x0: -WAFER_RADIUS,
+        y0: -WAFER_RADIUS,
+        x1: WAFER_RADIUS,
+        y1: WAFER_RADIUS,
+        line: { color: "#667085", width: 1 },
+      });
+
+      if (showVectors) {
+        panelRows.forEach((row) => {
+          const px = trueX(row);
+          const py = trueY(row);
+          const ux = Number(row.overlay_x ?? 0);
+          const uy = Number(row.overlay_y ?? 0);
+          const valid = row.overlay_valid_x !== false && row.overlay_valid_y !== false;
+          if (!valid || !Number.isFinite(px) || !Number.isFinite(py) || (ux === 0 && uy === 0)) return;
+          annotations.push({
+            x: px + ux * vectorScale,
+            y: py + uy * vectorScale,
+            ax: px,
+            ay: py,
+            xref: axisRef,
+            yref: yAxisRef,
+            axref: axisRef,
+            ayref: yAxisRef,
+            showarrow: true,
+            arrowhead: 3,
+            arrowsize: 1.1,
+            arrowwidth: anomalySet.has(waferId) ? 2 : 1.5,
+            arrowcolor: anomalySet.has(waferId) ? "#f85149" : "#4c9aff",
+            text: "",
+          });
+        });
+      }
     });
 
-    waferLayout[`xaxis${axisSuffix}`] = axisLayout;
-    waferLayout[`yaxis${axisSuffix}`] = yAxisLayout;
+    // One rotated label per lot row, to the left of that row's wafer panels.
+    const yEnd = 1 - rowIndex / gridRows - 0.05;
+    const yStart = 1 - (rowIndex + 1) / gridRows + 0.05;
+    annotations.push({
+      x: -0.01,
+      y: (yStart + yEnd) / 2,
+      xref: "paper",
+      yref: "paper",
+      xanchor: "right",
+      text: `<b>${lotId}</b>`,
+      showarrow: false,
+      textangle: -90,
+      font: { color: "#8b97a8", size: 11 },
+    });
   });
 
   Object.assign(waferLayout, {
+    grid: { rows: gridRows, columns, pattern: "independent" },
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    margin: { l: 8, r: 8, t: 12, b: 8 },
-    height: Math.max(260, waferRows * 250),
+    margin: { l: 28, r: 8, t: 12, b: 8 },
+    height: Math.max(
+      480,
+      gridRows * (showVectors ? 520 : Math.max(150, Math.min(360, Math.round(plotEl.clientWidth / columns))))
+    ),
     showlegend: false,
     hovermode: "closest",
     annotations,
@@ -541,7 +579,8 @@ function renderWaferMap(evidence) {
     font: { color: "#8b97a8", size: 11 },
   });
 
-  noteEl.textContent = `${rows.length} point measurements across ${waferIds.length} wafers`;
+  const totalWafers = [...waferIdsPerLot.values()].reduce((n, ids) => n + ids.length, 0);
+  noteEl.textContent = `${rows.length} point measurements across ${totalWafers} wafer${totalWafers === 1 ? "" : "s"} in ${lotIds.length} lot${lotIds.length === 1 ? "" : "s"}`;
   Plotly.react(plotEl, traces, waferLayout, PLOT_CONFIG);
 }
 

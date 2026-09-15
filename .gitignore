@@ -7,3 +7,4 @@ agent_sessions.sqlite*
 .opo-monitoring.port
 .opo-monitoring.log
 .vscode/
+AnalyticsFoundation/mock_data/datawarehouse_wafers.json

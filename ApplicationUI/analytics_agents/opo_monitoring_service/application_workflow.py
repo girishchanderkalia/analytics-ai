@@ -76,11 +76,22 @@ class DetectionScope(BaseModel):
     product_id: str | None = Field(default=None, description="Product ID filter, if named.")
     layer_id: str | None = Field(default=None, description="Layer ID filter, if named.")
     exposure_equipment_id: str | None = Field(default=None, description="Exposure equipment ID filter, if named.")
-
-
-class ThresholdRecommendation(BaseModel):
-    suggested_limit_value: float = Field(description="Absolute OPO KPI cutoff to show the analyst.")
-    rationale: str = Field(description="One short explanation grounded in the supplied P95/P99 values.")
+    suggested_limit_value: float | None = Field(
+        default=None,
+        description=(
+            "Only when the analyst did not name an explicit numeric threshold: an absolute "
+            "OPO KPI outlier cutoff recommended from the supplied empirical P95/P99 context. "
+            "Prefer P95 for a broader screening threshold or P99 for severe anomalies. Null "
+            "when the analyst already named a number."
+        ),
+    )
+    suggested_limit_rationale: str | None = Field(
+        default=None,
+        description=(
+            "One short explanation for suggested_limit_value, grounded only in the supplied "
+            "P95/P99 values. Null when suggested_limit_value is null."
+        ),
+    )
 
 
 class FindingsSummary(BaseModel):
@@ -115,6 +126,7 @@ class InvestigationState(TypedDict, total=False):
     exposure_equipment_id: str | None
     threshold_context: dict
     threshold_recommendation: dict
+    needs_threshold_clarification: bool
     trend_series: list[dict]
     analysis: Annotated[list[dict], _keep_last]
     outliers: Annotated[list[dict], _keep_last]
@@ -137,7 +149,13 @@ def _is_approved(decision: Any) -> bool:
 
 
 def parse_scope(state: InvestigationState) -> InvestigationState:
-    """Choose the detection rule from the analyst's phrasing; detection itself stays in code."""
+    """Choose the detection rule from the analyst's phrasing; detection itself stays in code.
+
+    Does not itself call ``interrupt()``: LangGraph re-executes a node's entire function
+    body (including any LLM calls) from the top every time that node resumes from an
+    interrupt, so the interrupt for an absolute-threshold clarification lives in the
+    separate, minimal ``confirm_absolute_threshold`` node below instead.
+    """
     question = state.get("question", "")
     mode = "baseline"
     limit = DEFAULT_LIMIT_VALUE
@@ -155,9 +173,14 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
     layer_id = None
     exposure_equipment_id = None
 
-    clarification: Any = None
     threshold_context: dict[str, Any] = {}
     threshold_recommendation: dict[str, Any] = {}
+    suggested_limit_value: float | None = None
+    suggested_limit_rationale: str | None = None
+    # Empirical context for a *default* (unfiltered, 14-day) lookback, computed up front
+    # with no LLM call so the single model call below can recommend a cutoff in the same
+    # response instead of needing a second round-trip once filters are known.
+    default_threshold_context = services.get_kpi_threshold_context(days=14)
     try:
         with session_memory.timed_event("model_call", {"purpose": "scope_interpretation"}):
             scope = get_llm().with_structured_output(DetectionScope).invoke(
@@ -167,7 +190,12 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
                 "no number, compare each machine against its own normal level. Extract "
                 "lookback_days from phrases like 'last 7 days' and extract any named "
                 "machine, lot, product, layer, or exposure equipment filters.\n\n"
-                f"Request: {question}"
+                f"Request: {question}\n\n"
+                "If the analyst did NOT name an explicit numeric threshold, also recommend an "
+                "absolute OPO KPI outlier cutoff as suggested_limit_value, using only this "
+                "empirical context, and explain it in suggested_limit_rationale. If the analyst "
+                "DID name a number, leave suggested_limit_value and suggested_limit_rationale null.\n\n"
+                f"Empirical context (last 14 days, all machines): {default_threshold_context}"
             )
         mode = scope.mode
         limit = float(scope.limit_value)
@@ -181,6 +209,8 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         product_id = scope.product_id
         layer_id = scope.layer_id
         exposure_equipment_id = scope.exposure_equipment_id
+        suggested_limit_value = scope.suggested_limit_value
+        suggested_limit_rationale = scope.suggested_limit_rationale
         session_memory.record_event(
             "model_interpretation",
             {"request": question, "interpretation": scope.model_dump()},
@@ -206,6 +236,8 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         limit = float(threshold_match.group(2))
         threshold_unit = "percent" if threshold_match.group(3) or "%" in question else "absolute"
 
+    lookback_days = min(max(int(lookback_days), 1), 90)
+
     if not threshold_match:
         threshold_context = services.get_kpi_threshold_context(
             days=lookback_days,
@@ -215,53 +247,40 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
             layer_id=layer_id,
             exposure_equipment_id=exposure_equipment_id,
         )
-        try:
-            with session_memory.timed_event("model_call", {"purpose": "threshold_recommendation"}):
-                recommendation = get_llm().with_structured_output(ThresholdRecommendation).invoke(
-                    "Recommend an absolute OPO KPI outlier cutoff using only this empirical context. "
-                    "Prefer P95 for a broader screening threshold or P99 for severe anomalies. "
-                    "Do not return a percentage and do not use a hidden default. Explain the choice briefly.\n\n"
-                    f"Context: {threshold_context}"
-                )
-            suggested_limit = float(recommendation.suggested_limit_value)
-            threshold_recommendation = recommendation.model_dump()
-        except Exception:
-            log.warning("Could not recommend a KPI threshold", exc_info=True)
+        if suggested_limit_value is not None:
+            suggested_limit = float(suggested_limit_value)
+            threshold_recommendation = {
+                "suggested_limit_value": suggested_limit,
+                "rationale": suggested_limit_rationale or "Suggested from the empirical P95/P99 OPO KPI distribution.",
+            }
+        else:
+            log.warning("Model did not recommend a KPI threshold for %r; using empirical fallback", question)
             suggested_limit = float(threshold_context.get("p95") or threshold_context.get("p99") or DEFAULT_LIMIT_VALUE)
             threshold_recommendation = {
                 "suggested_limit_value": suggested_limit,
                 "rationale": "Suggested from the empirical P95/P99 OPO KPI distribution.",
             }
-        threshold_recommendation["suggested_limit_value"] = suggested_limit
         session_memory.record_event(
             "threshold_recommendation",
             {"context": threshold_context, "recommendation": threshold_recommendation},
             source="application",
         )
-        clarification = interrupt(
-            {
-                "type": "clarify_absolute_threshold",
-                "question": "Which absolute OPO KPI threshold should count as an outlier?",
-                "metric": "OPO KPI",
-                "unit": "absolute",
-                "default_not_applied": True,
-                "p95": threshold_context.get("p95"),
-                "p99": threshold_context.get("p99"),
-                "suggested_limit_value": suggested_limit,
-                "rationale": threshold_recommendation.get("rationale"),
-            }
-        )
-        if not _is_approved(clarification):
-            return {"cancelled_at": "clarify_absolute_threshold"}
-        if isinstance(clarification, dict):
-            limit = float(clarification.get("limit_value", suggested_limit))
-        else:
-            limit = float(clarification)
-        limit = max(limit, MIN_LIMIT_VALUE)
-        mode = "absolute"
-        direction = "above"
-        threshold_unit = "absolute"
-        interpretation = f"Absolute OPO KPI values at or above {limit} will be treated as outliers."
+        return {
+            "mode": mode,
+            "direction": direction,
+            "threshold_unit": threshold_unit,
+            "baseline_deviation_pct": deviation,
+            "interpretation": interpretation,
+            "lookback_days": lookback_days,
+            "machine_id": machine_id,
+            "lot_id": lot_id,
+            "product_id": product_id,
+            "layer_id": layer_id,
+            "exposure_equipment_id": exposure_equipment_id,
+            "threshold_context": threshold_context,
+            "threshold_recommendation": threshold_recommendation,
+            "needs_threshold_clarification": True,
+        }
 
     # Clamped only at the bounds of physical meaning, and the original is kept so the
     # UI can say when it differed rather than silently answering a different question
@@ -277,7 +296,7 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         "threshold_unit": threshold_unit,
         "baseline_deviation_pct": deviation,
         "interpretation": interpretation,
-        "lookback_days": min(max(int(lookback_days), 1), 90),
+        "lookback_days": lookback_days,
         "machine_id": machine_id,
         "lot_id": lot_id,
         "product_id": product_id,
@@ -285,6 +304,48 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         "exposure_equipment_id": exposure_equipment_id,
         "threshold_context": threshold_context,
         "threshold_recommendation": threshold_recommendation,
+        "needs_threshold_clarification": False,
+    }
+
+
+def confirm_absolute_threshold(state: InvestigationState) -> InvestigationState:
+    """Ask the analyst to accept or edit the recommended absolute KPI cutoff.
+
+    Kept minimal - the interrupt is the first real statement - because LangGraph
+    re-executes a node's whole function body from the top on every resume from an
+    interrupt; if the LLM call from ``parse_scope`` lived here too, accepting the
+    threshold would re-run that model call (and its latency) again.
+    """
+    threshold_context = state.get("threshold_context") or {}
+    threshold_recommendation = state.get("threshold_recommendation") or {}
+    suggested_limit = threshold_recommendation.get("suggested_limit_value", DEFAULT_LIMIT_VALUE)
+    clarification = interrupt(
+        {
+            "type": "clarify_absolute_threshold",
+            "question": "Which absolute OPO KPI threshold should count as an outlier?",
+            "metric": "OPO KPI",
+            "unit": "absolute",
+            "default_not_applied": True,
+            "p95": threshold_context.get("p95"),
+            "p99": threshold_context.get("p99"),
+            "suggested_limit_value": suggested_limit,
+            "rationale": threshold_recommendation.get("rationale"),
+        }
+    )
+    if not _is_approved(clarification):
+        return {"cancelled_at": "clarify_absolute_threshold"}
+    if isinstance(clarification, dict):
+        limit = float(clarification.get("limit_value", suggested_limit))
+    else:
+        limit = float(clarification)
+    limit = max(limit, MIN_LIMIT_VALUE)
+    return {
+        "mode": "absolute",
+        "limit_value": limit,
+        "requested_limit_value": limit,
+        "direction": "above",
+        "threshold_unit": "absolute",
+        "interpretation": f"Absolute OPO KPI values at or above {limit} will be treated as outliers.",
     }
 
 
@@ -320,12 +381,18 @@ def analyze_trends(state: InvestigationState) -> InvestigationState:
 
     # Fetch the point-level StarRocks preview as soon as trend outliers are known,
     # so the first response can render the wafer map before approval continues.
+    # Scope to the top candidate's machine/lot when the analyst didn't already name
+    # one, since an unfiltered fetch must normalize every row in the wafer table and
+    # would otherwise mix in every other lot ever measured on that machine.
     wafer_table = services.get_dataset_metadata()["wafer_table"]
     wafer_filters = {
-        "machine": state.get("machine_id") or state.get("exposure_equipment_id"),
-        "lot_id": state.get("lot_id"),
+        "machine": state.get("machine_id") or state.get("exposure_equipment_id") or outliers[0]["machine"],
         "layer_id": state.get("layer_id"),
     }
+    if state.get("lot_id"):
+        wafer_filters["lot_id"] = state["lot_id"]
+    elif outliers[0].get("outlier_lot_ids"):
+        wafer_filters["lot_ids"] = outliers[0]["outlier_lot_ids"]
     wafer_data = services.query_wafer_data("TREND_PREVIEW", wafer_table, wafer_filters)
     return {"analysis": analysis, "outliers": outliers, "trend_series": trend_series, "wafer_data": wafer_data}
 
@@ -363,6 +430,8 @@ def create_workspace(state: InvestigationState) -> InvestigationState:
 def apply_filters(state: InvestigationState) -> InvestigationState:
     selected = state["selected"]
     filters = {"machine": selected["machine"], "product": selected["product"]}
+    if selected.get("extreme_lot_id"):
+        filters["lot_id"] = selected["extreme_lot_id"]
     services.add_filters(state["workspace_id"], filters)
     return {"filters": filters}
 
@@ -408,6 +477,23 @@ def query_wafers(state: InvestigationState) -> InvestigationState:
 
 def summarise(state: InvestigationState) -> InvestigationState:
     wafer_data = state["wafer_data"]
+    rows = wafer_data.get("rows", [])
+    anomalous_wafers = wafer_data.get("anomalous_wafers", [])
+    # Summarise rather than embed every wafer row verbatim: a real dataset can still
+    # have hundreds of rows even after capping for display, and dumping all of them
+    # into the prompt can push the request past the model gateway's size limit.
+    magnitudes = [r["overlay_magnitude_um"] for r in rows if r.get("overlay_magnitude_um") is not None]
+    wafer_summary = {
+        "row_count": len(rows),
+        "anomalous_wafer_count": len(anomalous_wafers),
+        "overlay_magnitude_min": round(min(magnitudes), 4) if magnitudes else None,
+        "overlay_magnitude_max": round(max(magnitudes), 4) if magnitudes else None,
+        "overlay_magnitude_mean": round(sum(magnitudes) / len(magnitudes), 4) if magnitudes else None,
+    }
+    sample_rows = [
+        {k: r.get(k) for k in ("wafer_id", "lot_id", "overlay_x_um", "overlay_y_um", "overlay_magnitude_um")}
+        for r in rows[:10]
+    ]
     prompt = (
         "You are the OPO Application Agent for overlay analytics investigation.\n"
         "Return a structured summary with finding, evidence_references, confidence, limitations, "
@@ -419,12 +505,36 @@ def summarise(state: InvestigationState) -> InvestigationState:
         f"Filters applied: {state['filters']}\n"
         f"Workspace: {state['workspace_id']}\n"
         f"Registration: {state['registration']}\n"
-        f"Wafer rows: {wafer_data['rows']}\n"
-        f"Anomalous wafers: {wafer_data['anomalous_wafers']}\n"
+        f"Wafer summary: {wafer_summary}\n"
+        f"Sample wafer rows (first {len(sample_rows)} of {len(rows)}): {sample_rows}\n"
+        f"Anomalous wafers: {anomalous_wafers}\n"
     )
-    with session_memory.timed_event("model_call", {"purpose": "findings_summary"}):
-        findings = get_llm().with_structured_output(FindingsSummary).invoke(prompt)
-    return {"findings": findings.model_dump()}
+    try:
+        with session_memory.timed_event("model_call", {"purpose": "findings_summary"}):
+            findings = get_llm().with_structured_output(FindingsSummary).invoke(prompt)
+        return {"findings": findings.model_dump()}
+    except Exception:
+        # A transient model-gateway error here shouldn't 500 the whole request and
+        # strand the investigation - fall back to a plain, evidence-only summary.
+        log.warning("Could not generate a findings summary; the model gateway call failed", exc_info=True)
+        session_memory.record_event(
+            "model_interpretation",
+            {"purpose": "findings_summary", "fallback": True},
+            source="application",
+        )
+        return {
+            "findings": {
+                "finding": "The model gateway was unavailable, so no interpreted summary could be generated.",
+                "evidence_references": [
+                    "selected_outlier", "applied_filters", "workspace", "registration",
+                    "anomalous_wafers", "wafer_rows",
+                ],
+                "confidence": "low",
+                "limitations": ["The findings-summary model call failed; only the raw evidence above is available."],
+                "recommended_next_actions": ["Retry the investigation once the model gateway is available."],
+                "alternative_explanations": [],
+            }
+        }
 
 
 def _halted(state: InvestigationState) -> bool:
@@ -435,6 +545,7 @@ def build_graph():
     builder = StateGraph(InvestigationState)
 
     builder.add_node("parse_scope", parse_scope)
+    builder.add_node("confirm_absolute_threshold", confirm_absolute_threshold)
     builder.add_node("analyze_trends", analyze_trends)
     builder.add_node("confirm_investigation", confirm_investigation)
     builder.add_node("create_workspace", create_workspace)
@@ -447,6 +558,11 @@ def build_graph():
     builder.add_edge(START, "parse_scope")
     builder.add_conditional_edges(
         "parse_scope",
+        lambda s: "confirm_absolute_threshold" if s.get("needs_threshold_clarification") else "analyze_trends",
+        {"confirm_absolute_threshold": "confirm_absolute_threshold", "analyze_trends": "analyze_trends"},
+    )
+    builder.add_conditional_edges(
+        "confirm_absolute_threshold",
         lambda s: END if _halted(s) else "analyze_trends",
         {END: END, "analyze_trends": "analyze_trends"},
     )

@@ -28,10 +28,78 @@ class RegisterDatasetRequest(BaseModel):
 
 class ReadTrendsRequest(BaseModel):
     table: str | None = None
+    connection_info: dict[str, Any] | None = None
 
 
 class ReadWafersRequest(BaseModel):
     table: str | None = None
+    connection_info: dict[str, Any] | None = None
+
+
+class GetConnectionInfoRequest(BaseModel):
+    workspace_id: str
+
+
+class DatabaseExistsRequest(BaseModel):
+    database_name: str
+
+
+class CreateDatabaseRequest(BaseModel):
+    database_name: str
+
+
+class GetTableNamesRequest(BaseModel):
+    database_name: str
+
+
+class CreateTablesRequest(BaseModel):
+    database_name: str
+    tables: list[dict[str, Any]]
+
+
+class ListAssetsRequest(BaseModel):
+    type: str | None = None
+    name: str | None = None
+    sharing: str | None = None
+
+
+class GetAssetRequest(BaseModel):
+    asset_id: str
+
+
+class AddAssetRequest(BaseModel):
+    name: str
+    type: str
+    description: str | None = None
+    sharing: str = "private"
+    metadata: dict[str, Any] | None = None
+
+
+class DeleteAssetRequest(BaseModel):
+    asset_id: str
+
+
+class ListProcessingRequest(BaseModel):
+    workspace_id: str
+    service_name: str | None = None
+    service_version: str | None = None
+
+
+class CreateProcessingRequest(BaseModel):
+    workspace_id: str
+    service_name: str
+    service_version: str
+    display_name: str | None = None
+
+
+class GetProcessingRequest(BaseModel):
+    workspace_id: str
+    instance_id: str
+
+
+class StopProcessingRequest(BaseModel):
+    workspace_id: str
+    instance_id: str
 
 
 @dataclass(frozen=True)
@@ -130,7 +198,14 @@ class CapabilityRegistry:
 
 
 def _build_default_registry() -> CapabilityRegistry:
-    from AnalyticsFoundation import query_engine_client, workspace_client
+    from AnalyticsFoundation import (
+        assets_client,
+        datawarehouse,
+        lanadb_query,
+        processing_client,
+        query_engine_client,
+        workspace_client,
+    )
 
     registry = CapabilityRegistry()
     registry.register(
@@ -168,25 +243,168 @@ def _build_default_registry() -> CapabilityRegistry:
     )
     registry.register(
         CapabilityDefinition(
-            name="query_engine.read_trends",
-            description="Read raw KPI/trend rows from the Query Engine.",
+            name="workspace.get_connection_info",
+            description="Get the JDBC connection info for a workspace's provisioned database.",
+            request_model=GetConnectionInfoRequest,
+            required_permissions=("workspace:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        workspace_client.get_connection_info,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="data_query.read_trends",
+            description="Read raw KPI/trend rows from PostgreSQL.",
             request_model=ReadTrendsRequest,
             required_permissions=("query:trends:read",),
             requires_approval=False,
             side_effect=False,
         ),
-        query_engine_client.query_trend_rows,
+        lanadb_query.query_trend_rows,
     )
     registry.register(
         CapabilityDefinition(
-            name="query_engine.read_wafers",
-            description="Read raw wafer-level rows from the Query Engine.",
+            name="data_query.read_wafers",
+            description="Read raw wafer-level rows from StarRocks.",
             request_model=ReadWafersRequest,
             required_permissions=("query:wafers:read",),
             requires_approval=False,
             side_effect=False,
         ),
-        query_engine_client.query_wafer_rows,
+        datawarehouse.query_wafer_rows,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="query_engine.database_exists",
+            description="Check whether a Query Engine database exists.",
+            request_model=DatabaseExistsRequest,
+            required_permissions=("query_engine:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        query_engine_client.database_exists,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="query_engine.create_database",
+            description="Create a Query Engine database for a workspace's selected data.",
+            request_model=CreateDatabaseRequest,
+            required_permissions=("query_engine:write",),
+            requires_approval=True,
+            side_effect=True,
+        ),
+        query_engine_client.create_database,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="query_engine.get_table_names",
+            description="List table names in a Query Engine database.",
+            request_model=GetTableNamesRequest,
+            required_permissions=("query_engine:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        query_engine_client.get_table_names,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="query_engine.create_tables",
+            description="Create tables in a Query Engine database.",
+            request_model=CreateTablesRequest,
+            required_permissions=("query_engine:write",),
+            requires_approval=True,
+            side_effect=True,
+        ),
+        query_engine_client.create_tables,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="asset.list",
+            description="List accessible assets and their platform metadata.",
+            request_model=ListAssetsRequest,
+            required_permissions=("asset:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        assets_client.list_assets,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="asset.get",
+            description="Retrieve a single asset by id.",
+            request_model=GetAssetRequest,
+            required_permissions=("asset:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        assets_client.get_asset,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="asset.add",
+            description="Upload a new asset with metadata.",
+            request_model=AddAssetRequest,
+            required_permissions=("asset:write",),
+            requires_approval=False,
+            side_effect=True,
+        ),
+        assets_client.add_asset,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="asset.delete",
+            description="Delete an asset by id.",
+            request_model=DeleteAssetRequest,
+            required_permissions=("asset:write",),
+            requires_approval=True,
+            side_effect=True,
+        ),
+        assets_client.delete_asset,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="processing.list",
+            description="List processing instances for a workspace.",
+            request_model=ListProcessingRequest,
+            required_permissions=("processing:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        processing_client.list_processing_instances,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="processing.create",
+            description="Enqueue a processing instance for a workspace; provisions compute.",
+            request_model=CreateProcessingRequest,
+            required_permissions=("processing:write",),
+            requires_approval=True,
+            side_effect=True,
+        ),
+        processing_client.create_processing_instance,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="processing.get",
+            description="Retrieve a processing instance by id.",
+            request_model=GetProcessingRequest,
+            required_permissions=("processing:read",),
+            requires_approval=False,
+            side_effect=False,
+        ),
+        processing_client.get_processing_instance,
+    )
+    registry.register(
+        CapabilityDefinition(
+            name="processing.stop",
+            description="Stop a running processing instance.",
+            request_model=StopProcessingRequest,
+            required_permissions=("processing:write",),
+            requires_approval=True,
+            side_effect=True,
+        ),
+        processing_client.stop_processing_instance,
     )
     return registry
 

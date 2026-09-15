@@ -130,6 +130,7 @@ main.right-panel-collapsed {
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--border);
+  overflow-y: auto;
 }
 
 .timeline {
@@ -543,7 +544,7 @@ tr.anomalous td {
 }
 
 .wafer-plot {
-  height: 260px;
+  min-height: 320px;
 }
 
 .chart-head {

@@ -1,22 +1,23 @@
 """OPO-specific domain logic: KPI trend synthesis, outlier detection, wafer scoring.
 
 Raw data access goes through the ``AnalyticsFoundation`` platform clients
-(``workspace_client``, ``query_engine_client``); this module owns the business
-interpretation of that data, which is application-specific and not a platform concern.
+(``workspace_client``, ``lanadb_query``, ``datawarehouse``); this module owns the
+business interpretation of that data, which is application-specific and not a
+platform concern.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from statistics import median
 from typing import Any
 
-from AnalyticsFoundation import query_engine_client
+from AnalyticsFoundation import datawarehouse, lanadb_query
 from AnalyticsFoundation.capability_registry import invoke as invoke_capability
 
-DEFAULT_ABSOLUTE_BASELINE = 3.0
 OPO_PERMISSIONS = {
     "workspace:create",
     "workspace:write",
     "workspace:register",
+    "workspace:read",
     "query:trends:read",
     "query:wafers:read",
 }
@@ -34,7 +35,7 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 
 def get_dataset_metadata() -> dict[str, Any]:
-    return query_engine_client.get_table_metadata()
+    return {**lanadb_query.get_table_metadata(), **datawarehouse.get_table_metadata()}
 
 
 def _coerce_series_identity(item: dict[str, Any]) -> tuple[str, str]:
@@ -53,6 +54,20 @@ def _coerce_series_identity(item: dict[str, Any]) -> tuple[str, str]:
     return str(machine), str(product)
 
 
+def _coerce_point_timestamp(value: Any) -> datetime | None:
+    """Parse a real lotStart timestamp (ISO string or datetime), keeping time-of-day."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def get_trend_series(
     days: int = 14,
     machine_id: str | None = None,
@@ -61,12 +76,12 @@ def get_trend_series(
     layer_id: str | None = None,
     exposure_equipment_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Raw daily KPI per machine/product. Carries no judgement about outliers."""
-    today = date.today()
-    series = []
+    """Real historical KPI points per machine/product. Carries no judgement about outliers."""
+    cutoff = date.today() - timedelta(days=days - 1)
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
 
     for item in invoke_capability(
-        "query_engine.read_trends",
+        "data_query.read_trends",
         permissions=OPO_PERMISSIONS,
         table=None,
     ):
@@ -81,33 +96,33 @@ def get_trend_series(
             continue
         if exposure_equipment_id and str(item.get("exposureEquipmentId", "")).lower() != exposure_equipment_id.lower():
             continue
-        dip_days = int(item.get("dip_days", item.get("dipDays", 1)))
-        absolute_baseline = float(item.get("absolute_baseline", item.get("absoluteBaseline", DEFAULT_ABSOLUTE_BASELINE)))
-        absolute_outlier = float(item.get("absolute_outlier", item.get("absoluteOutlier", absolute_baseline)))
 
-        points = []
+        point_timestamp = _coerce_point_timestamp(item.get("lotStart", item.get("lot_start")))
+        kpi_value = item.get("kpiValue1", item.get("kpi_value"))
+        if point_timestamp is None or point_timestamp.date() < cutoff or kpi_value is None:
+            continue
 
-        for i in range(days):
-            point_date = today - timedelta(days=days - 1 - i)
-            wobble = ((i * 37) % 7 - 3) / 10
-            is_dip = i >= days - dip_days
-            absolute_wobble = ((i * 29) % 7 - 3) / 100
-            points.append(
-                {
-                    "date": point_date.isoformat(),
-                    "kpi_value": round((absolute_outlier if is_dip else absolute_baseline) + absolute_wobble, 2),
-                }
-            )
-
-        series.append({
-            "machine": machine,
-            "product": product,
+        key = (machine, product)
+        group = grouped.setdefault(
+            key,
+            {
+                "machine": machine,
+                "product": product,
+                "lot_id": item.get("lotId", item.get("lot_id")),
+                "layer_id": item.get("layerId", item.get("layer_id")),
+                "exposure_equipment_id": item.get("exposureEquipmentId"),
+                "points": [],
+            },
+        )
+        group["points"].append({
+            "date": point_timestamp.isoformat(),
+            "kpi_value": round(float(kpi_value), 2),
             "lot_id": item.get("lotId", item.get("lot_id")),
-            "layer_id": item.get("layerId", item.get("layer_id")),
-            "exposure_equipment_id": item.get("exposureEquipmentId"),
-            "points": points,
         })
 
+    series = list(grouped.values())
+    for entry in series:
+        entry["points"].sort(key=lambda p: p["date"])
     return series
 
 
@@ -181,18 +196,18 @@ def analyse_series(
             if limit_unit == "percent":
                 applied = baseline * (1 + requested / 100) if above else baseline * (1 - requested / 100)
             flagged = [
-                p for p in s["points"]
+                (i, p) for i, p in enumerate(s["points"])
                 if (p["kpi_value"] >= applied if above else p["kpi_value"] <= applied)
             ]
-            values = [p["kpi_value"] for p in flagged]
+            values = [p["kpi_value"] for _, p in flagged]
             extreme = (max(values) if above else min(values)) if values else None
-            extreme_kpi = max((p["kpi_value"] for p in flagged), default=None) if above else min((p["kpi_value"] for p in flagged), default=None)
+            extreme_kpi = max((p["kpi_value"] for _, p in flagged), default=None) if above else min((p["kpi_value"] for _, p in flagged), default=None)
         else:
             applied = baseline * (1 + baseline_deviation_pct / 100)
-            flagged = [p for p in s["points"] if p["kpi_value"] >= applied]
-            values = [p["kpi_value"] for p in flagged]
+            flagged = [(i, p) for i, p in enumerate(s["points"]) if p["kpi_value"] >= applied]
+            values = [p["kpi_value"] for _, p in flagged]
             extreme = max(values) if values else None
-            extreme_kpi = max((p["kpi_value"] for p in flagged), default=None)
+            extreme_kpi = max((p["kpi_value"] for _, p in flagged), default=None)
 
         analysis.append(
             {
@@ -201,12 +216,21 @@ def analyse_series(
                 "baseline": round(baseline, 1),
                 "limit_applied_value": round(applied, 2),
                 "extreme_kpi_value": extreme_kpi,
+                # Keep the most extreme lot for compatibility, but retain every flagged
+                # lot so a deep-dive can inspect the complete selected outlier series.
+                "extreme_lot_id": next((p.get("lot_id") for _, p in flagged if p["kpi_value"] == extreme), None) if extreme is not None else None,
+                "outlier_lot_ids": list(dict.fromkeys(
+                    p.get("lot_id") for _, p in flagged if p.get("lot_id")
+                )),
                 "deviation_pct": (
                     round(abs(extreme - baseline) / baseline * 100, 1)
                     if extreme is not None
                     else 0.0
                 ),
-                "outlier_dates": [p["date"] for p in flagged],
+                # Real series can have multiple points sharing the same timestamp (e.g.
+                # several wafers from one lot), so pair each date with its point index -
+                # a bare date string would ring every point sharing that timestamp.
+                "outlier_dates": [f"{i}#{p['date']}" for i, p in flagged],
             }
         )
 
@@ -285,25 +309,59 @@ def _normalize_wafer_row(row: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+_RAW_FILTER_FIELDS = {
+    "machine": ("exposureprocessjob_equipment_equipmentid", "machine", "exposureEquipmentId"),
+    "lot_id": ("exposureprocessjob_lotid", "lot_id", "lotId"),
+    "layer_id": ("measureprocessjob_layerid", "layer_id", "layerId"),
+}
+
+
+def _matches_raw_filters(row: dict[str, Any], filters: dict[str, Any]) -> bool:
+    for key, candidates in _RAW_FILTER_FIELDS.items():
+        value = filters.get(key)
+        if not value:
+            continue
+        raw_value = next((row.get(c) for c in candidates if row.get(c) is not None), None)
+        if str(raw_value or "").lower() != str(value).lower():
+            return False
+    lot_ids = filters.get("lot_ids")
+    if lot_ids:
+        raw_lot_id = next(
+            (row.get(candidate) for candidate in _RAW_FILTER_FIELDS["lot_id"] if row.get(candidate) is not None),
+            None,
+        )
+        allowed_lot_ids = {str(lot_id).lower() for lot_id in lot_ids}
+        if str(raw_lot_id or "").lower() not in allowed_lot_ids:
+            return False
+    return True
+
+
 def query_wafer_data(
     workspace_id: str,
     table: str,
     filters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    connection_info = None
+    if workspace_id and workspace_id != "TREND_PREVIEW":
+        connection_info = invoke_capability(
+            "workspace.get_connection_info",
+            permissions=OPO_PERMISSIONS,
+            workspace_id=workspace_id,
+        )
+    filters = filters or {}
+
+    # Filter on raw rows before the (relatively expensive) per-row normalization,
+    # since the mocked JDBC read has no server-side filtering of its own.
     rows = [
         _normalize_wafer_row(row)
         for row in invoke_capability(
-            "query_engine.read_wafers",
+            "data_query.read_wafers",
             permissions=OPO_PERMISSIONS,
             table=table,
+            connection_info=connection_info,
         )
+        if _matches_raw_filters(row, filters)
     ]
-
-    filters = filters or {}
-    for key in ("machine", "lot_id", "layer_id"):
-        value = filters.get(key)
-        if value:
-            rows = [row for row in rows if str(row.get(key, "")).lower() == str(value).lower()]
 
     anomalous = [
         r["wafer_id"]

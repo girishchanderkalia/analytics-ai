@@ -31,6 +31,15 @@ service_running() {
   kill -0 "$pid" 2>/dev/null
 }
 
+ensure_mock_data() {
+  local gz="AnalyticsFoundation/mock_data/datawarehouse_wafers.json.gz"
+  local out="AnalyticsFoundation/mock_data/datawarehouse_wafers.json"
+  if [[ -f "$gz" ]] && { [[ ! -f "$out" ]] || [[ "$gz" -nt "$out" ]]; }; then
+    printf '%s\n' "Unpacking wafer mock dataset ($gz)..."
+    "$PYTHON" -c "import gzip, shutil; shutil.copyfileobj(gzip.open('$gz', 'rb'), open('$out', 'wb'))"
+  fi
+}
+
 read_port() {
   PORT="${ASML_AI_PORT:-8000}"
   if [[ -f .opo-monitoring.port ]]; then
@@ -59,6 +68,8 @@ start_service() {
   printf '%s\n' "Installing Python dependencies..."
   "$PYTHON" -m pip install --upgrade pip
   "$PYTHON" -m pip install -r requirements.txt
+
+  ensure_mock_data
 
   PORT="${ASML_AI_PORT:-8000}"
   if command -v powershell.exe >/dev/null 2>&1; then
@@ -119,6 +130,7 @@ case "$COMMAND" in
     ;;
   run)
     find_python
+    ensure_mock_data
     exec "$PYTHON" -m uvicorn ApplicationUI.analytics_agents.opo_monitoring_service.api:app \
       --host "${ASML_AI_HOST:-127.0.0.1}" \
       --port "${ASML_AI_PORT:-8000}"

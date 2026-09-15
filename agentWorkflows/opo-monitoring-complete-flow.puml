@@ -1,6 +1,4 @@
-@startuml OPO Monitoring Complete Flow
-
-' Complete OPO monitoring interaction and investigation workflow.
+@startuml OPO Monitoring Flowchart
 
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
@@ -10,253 +8,153 @@ skinparam ArrowColor #475569
 skinparam partitionBackgroundColor #F8FAFC
 skinparam partitionBorderColor #94A3B8
 skinparam partitionFontColor #0F172A
-skinparam partitionFontSize 14
+skinparam partitionFontSize 13
 skinparam activity {
   BackgroundColor #E0F2FE
   BorderColor #1D4ED8
   FontColor #0F172A
-  DiamondBackgroundColor #FEF3C7
-  DiamondBorderColor #B45309
-  StartColor #16A34A
-  EndColor #DC2626
-  BarColor #2563EB
 }
-skinparam note {
-  BackgroundColor #F1F5F9
-  BorderColor #64748B
-  FontColor #0F172A
-}
+
+title OPO Monitoring Investigation Flow
+
+legend top right
+  APP-UI: Application UI that renders plots,
+  wafer maps, evidence, and user controls
+  AI-AGENT: AI agent that invokes
+  LangGraph and enables AI interaction
+  LG: LangGraph scope
+  MODEL: Model scope
+  AF: Analytics Foundation
+  EVIDENCE: Bounded evidence
+  MEMORY: Session metadata and audit events
+
+  The six main stages flow vertically.
+  Each activity explicitly names the caller and target.
+endlegend
 
 start
 
-partition "Application UI - OPO Monitoring UI" {
-  :Load OPO Monitoring UI;
-  :Request raw trend data;
-  :Render daily trend chart;
-  :Initialize empty wafer map;
-  :Initialize empty conversation history;
-  :User enters investigation request
-  in the right-side agent panel;
+partition "1. Display trend chart" {
+  :<b>USER -> APP-UI</b>: Open OPO UI;
+  :<b>APP-UI -> AF</b>: Get trend data from LANADB;
+  :<b>APP-UI</b>: Display trend plot;
 }
 
-partition "OPO Monitoring Service - Application-owned workflow" {
-  :Create or resume session;
-  :Record user_request event;
-}
-
-partition "Model" {
-  :Model interprets user intent,
-  filters, time range, and explicit threshold;
-}
-
-note right
-  Example model input:
-  "Show me outliers above 3.1 for NXE3600
-  in product P200 over the last 7 days"
-
-  Example model output:
-  {
-    mode: absolute,
-    direction: above,
-    limit_value: 3.1,
-    threshold_unit: absolute,
-    machine_id: NXE3600,
-    product_id: P200,
-    lookback_days: 7
-  }
-end note
-
-partition "OPO Monitoring Service - Application-owned workflow" {
-  :Validate model scope;
-  :Apply explicit phrase parsing
-  and bounds validation;
-}
-
-if (Explicit absolute KPI threshold supplied?) then (yes)
-  :Use the user-provided absolute KPI cutoff;
-else (no)
-  partition "Analytics Foundation - Query Engine capability" {
-    :Read raw OPO KPI trend rows;
-  }
-
-  partition "OPO Monitoring Service - Application-owned analysis" {
-    :Calculate empirical KPI statistics;
-    :Calculate P95 and P99 as absolute KPI values;
-    :Build threshold context;
-  }
-
-  partition "Model" {
-    :Recommend one absolute cutoff
-    using P95/P99 context;
-    :Return suggested_limit_value
-    and rationale;
-  }
-
+partition "2. Monitor data" {
+  :<b>USER -> APP-UI</b>: Submit "Show Trends and outliers";
+  :<b>APP-UI -> AI-AGENT</b>: Send user request;
+  :<b>AI-AGENT</b>: Calculate sample count, min, max, P95, and P99;
+  :<b>AI-AGENT -> LG</b>: Invoke workflow with request and context;
+  :<b>LG -> MODEL</b>: Send request and context to model;
   note right
-    Example model input:
+    Model input:
     {
-      metric: OPO KPI,
-      unit: absolute,
-      p95: 3.196,
-      p99: 3.293
+      "request": "Show Trends and outliers",
+      "empirical_context": {
+        "metric": "OPO KPI",
+        "unit": "absolute",
+        "sample_count": 480,
+        "observed_min": 2.87,
+        "observed_max": 3.25,
+        "p95": 3.191,
+        "p99": 3.25
+      }
     }
 
-    Example model output:
+    Model output: extracted intent
     {
-      suggested_limit_value: 3.2,
-      rationale: "P95 gives broader screening"
+      "mode": "baseline",
+      "interpretation": "Compare each machine with its own normal level",
+      "machine_id": null,
+      "product_id": null,
+      "lookback_days": 14,
+      "limit_value": 3.0,
+      "direction": "below",
+      "threshold_unit": "percent",
+      "baseline_deviation_pct": 3.0
+    }
+
+    Model output: recommendation
+    {
+      "suggested_limit_value": 3.191,
+      "suggested_limit_rationale":
+        "P95 provides a broad screening cutoff"
     }
   end note
-
-  partition "Application UI - OPO Monitoring UI" {
-    :Show P95 and P99 as reference values;
-    :Show the model recommendation;
-    :Ask the user to approve or edit
-    the selected absolute cutoff;
-  }
-
-  if (User approves a cutoff?) then (yes)
-    :Store approved limit_value;
-  else (no)
-    :Record rejection;
-    stop
-  endif
-endif
-
-partition "OPO Monitoring Service - Application-owned analysis" {
-  :Read or reuse OPO KPI trend rows;
-  :Apply the selected absolute KPI threshold;
-  :Detect and rank outlier series;
-  :Record evidence_item and timing;
+  :<b>LG</b>: Validate scope and filters;
+  :<b>LG -> AI-AGENT</b>: Return structured intent and recommendation;
+  :<b>AI-AGENT -> APP-UI</b>: Return interpreted scope;
 }
 
-if (Outliers found?) then (yes)
-  partition "Application UI - OPO Monitoring UI" {
-    :Show outliers in the right-side
-    interaction history;
-    :Ask user to select or approve
-    an outlier;
-  }
-
-  if (User approves an outlier?) then (yes)
-    :Store selected outlier;
-    :Record human_decision event;
-  else (no)
-    :Record rejection;
-    stop
-  endif
-else (no)
-  partition "Application UI - OPO Monitoring UI" {
-    :Show no-outliers result
-    and applied threshold;
-  }
-  stop
-endif
-
-partition "Analytics Foundation - Workspace capability" {
-  :Create workspace;
-  :Apply machine and product filters;
+partition "3. Deep dive outliers: approval for cutoff" {
+  :<b>AI-AGENT</b>: Use previously calculated threshold context;
+  :<b>AI-AGENT -> APP-UI</b>: Request cutoff approval;
+  :<b>APP-UI -> USER</b>: Display cutoff approval control;
+  :<b>USER -> APP-UI</b>: Approve or edit cutoff;
+  :<b>APP-UI -> AI-AGENT</b>: Submit cutoff decision;
+  :<b>AI-AGENT -> LG</b>: Resume workflow with approved cutoff;
+  :<b>LG -> AI-AGENT</b>: Return ranked outlier identifiers and lot IDs;
+  :<b>AI-AGENT -> APP-UI</b>: Show outlier identifiers and lot IDs;
 }
 
-partition "Application UI - OPO Monitoring UI" {
-  :Show workspace and filter evidence;
-  :Ask user to approve dataset registration;
+partition "4. Display wafer maps of outliers" {
+  :<b>AI-AGENT -> AF</b>: Get wafer data for flagged lots;
+  :<b>AF -> AI-AGENT</b>: Return wafer data;
+  :<b>AI-AGENT -> APP-UI</b>: Send lot-grouped wafer data;
+  :<b>APP-UI</b>: Display lot-grouped wafer maps;
+  :<b>APP-UI -> EVIDENCE</b>: Show wafer evidence;
 }
 
-if (User approves registration?) then (yes)
-  :Record human_decision event;
-else (no)
-  :Record rejection;
-  stop
-endif
-
-partition "Analytics Foundation - Workspace capability" {
-  :Register overlay wafer dataset;
-  :Poll registration status;
+partition "5. Deep dive extreme outlier" {
+  :<b>APP-UI -> USER</b>: Request extreme outlier selection;
+  :<b>USER -> APP-UI</b>: Select extreme outlier;
+  :<b>APP-UI -> AI-AGENT</b>: Submit selection;
+  :<b>AI-AGENT -> LG</b>: Start focused workflow;
+  :<b>AI-AGENT -> AF</b>: Get focused extreme-lot data;
+  :<b>AF -> AI-AGENT</b>: Return focused wafer data;
+  :<b>AI-AGENT -> APP-UI</b>: Send focused evidence;
+  :<b>APP-UI</b>: Display focused evidence;
 }
 
-if (Registration READY?) then (yes)
-  :Record registration evidence;
-else (no)
-  :Record timeout or failure;
-  stop
-endif
+partition "6. Deep dive summary" {
+  :<b>LG -> MODEL</b>: Summarize selected outlier and evidence;
+  note right
+    Model input:
+    {
+      "selected_outlier": {
+        "machine": "0009",
+        "product": "Product8",
+        "extreme_kpi_value": 3.25,
+        "extreme_lot_id": "DG-LOT-1788874556-8"
+      },
+      "filters": {
+        "machine": "0009",
+        "product": "Product8",
+        "lot_id": "DG-LOT-1788874556-8"
+      },
+      "registration_status": "READY",
+      "wafer_summary": {
+        "row_count": 2176,
+        "anomalous_wafer_count": 4
+      },
+      "sample_rows": ["bounded sample only"]
+    }
 
-partition "Analytics Foundation - Query Engine capability" {
-  :Read raw wafer-level rows;
-}
-
-partition "OPO Monitoring Service - Application-owned analysis" {
-  :Apply workspace filters;
-  :Normalize wafer identifiers and measurements;
-  :Calculate overlay magnitude;
-  :Identify anomalous wafers;
-  :Record wafer evidence;
-}
-
-partition "Application UI - OPO Monitoring UI" {
-  :Render wafer map and wafer evidence
-  in the right-side agent panel;
-}
-
-partition "Model" {
-  :Summarize selected outlier and
-  supplied evidence using structured output;
-}
-
-note right
-  Model input - structured evidence:
-  {
-    selected_outlier: {
-      machine: NXE3600,
-      product: P200,
-      extreme_kpi_value: 3.21,
-      outlier_dates: [2026-09-12, 2026-09-13]
-    },
-    applied_filters: {machine: NXE3600, product: P200},
-    workspace: WS-AB12CD34,
-    registration: READY,
-    anomalous_wafers: [W004, W006],
-    wafer_rows: [...]
-  }
-
-  Model output - FindingsSummary:
-  {
-    finding: "Elevated OPO KPI on NXE3600",
-    evidence_references: [selected_outlier, anomalous_wafers],
-    confidence: medium,
-    limitations: ["No confirmed root cause"],
-    recommended_next_actions: ["Compare same layer on another machine"],
-    alternative_explanations: ["Lot variation", "Measurement variation"]
-  }
-end note
-
-partition "OPO Monitoring Service - Application-owned workflow" {
-  :Validate structured findings;
-  :Record final_finding and timing;
-}
-
-partition "Application UI - OPO Monitoring UI" {
-  :Show Investigation result beside evidence;
-  :Show finding, confidence, evidence references,
-  limitations, alternative explanations,
-  and recommended next actions;
-  :Keep complete interaction history scrollable
-  in the right panel;
+    Model output:
+    {
+      "finding": "Elevated OPO KPI on machine 0009",
+      "confidence": "medium",
+      "evidence_references": ["selected_outlier", "wafer_summary"],
+      "limitations": ["No confirmed root cause"],
+      "recommended_next_actions": ["Compare the same layer across machines"]
+    }
+  end note
+  :<b>MODEL -> LG</b>: Return findings summary;
+  :<b>LG -> AI-AGENT</b>: Return validated findings;
+  :<b>AI-AGENT -> APP-UI</b>: Send findings and references;
+  :<b>APP-UI</b>: Display findings and references;
 }
 
 stop
-
-note right
-  Ownership boundary:
-  - Application owns workflow, KPI semantics,
-    threshold application, wafer interpretation,
-    UI, and visualization.
-  - Analytics Foundation provides model connectivity,
-    governed capabilities, permissions, session
-    events, timing, and platform API access.
-  - The model interprets, recommends, and explains;
-    it does not perform deterministic KPI calculations.
-end note
 
 @enduml
