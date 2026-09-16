@@ -1,0 +1,51 @@
+# Applied only into the pre-existing `ai-agents` namespace, per
+# .github/copilot-instructions.md `## 9 Deployment`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-workflow-runtime
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-workflow-runtime
+  template:
+    metadata:
+      labels:
+        app: analytics-workflow-runtime
+    spec:
+      containers:
+        - name: workflow-runtime
+          image: repo.cluster.local:5443/ai-agents/analytics-workflow-runtime:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8100
+          env:
+            - name: ASML_AI_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-workflow-runtime-secrets
+                  key: database-url
+            - name: ASML_AI_KEY_VAULT_URL
+              value: https://ssa-prd-proj-15528-01-kv.vault.azure.net/
+            - name: ASML_AI_SECRET_NAME
+              value: ssa-ai-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-workflow-runtime
+  namespace: ai-agents
+spec:
+  selector:
+    app: analytics-workflow-runtime
+  ports:
+    - port: 8100
+      targetPort: 8100
+# Create the DB URL secret out-of-band, e.g.:
+#   kubectl create secret generic analytics-workflow-runtime-secrets -n ai-agents \
+#     --from-literal=database-url=postgresql://postgres:<password>@analytics-postgres:5432/ai_enabled_analytics_v2
+# Model gateway auth uses DefaultAzureCredential (foundation/config.py::get_api_key) -
+# needs a managed identity or workload identity bound to this pod in-cluster;
+# `az login` (local dev) does not carry over. Open decision, see PLAN.md.

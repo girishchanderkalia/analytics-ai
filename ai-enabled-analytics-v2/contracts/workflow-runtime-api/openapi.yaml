@@ -1,0 +1,450 @@
+openapi: 3.0.3
+info:
+  title: Analytics Investigation Workflow Runtime API
+  version: "1.0.0"
+  description: >-
+    The Python workflow runtime's own HTTP API (LangGraph + PydanticAI
+    application agent), per .github/copilot-instructions.md `### 2.1 Language
+    boundary`. This is the ONLY surface the Java app/API facade may call for
+    investigation/agent behavior; it must never call MCP tools, the model
+    gateway, or PostgreSQL/StarRocks directly. Served today by
+    application_ui/opo_monitoring_service/api.py.
+servers:
+  - url: http://127.0.0.1:8100
+    description: Local dev (see ai-enabled-analytics-v2/.env.example ASML_AI_V2_PORT)
+
+paths:
+  /trends:
+    get:
+      operationId: getTrends
+      summary: Raw KPI trend series for direct display (no agent/MCP involved)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  series:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrendSeries"
+
+  /chat:
+    post:
+      operationId: startInvestigation
+      summary: Start (or continue) an investigation from a free-text request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestigationResponse"
+
+  /resume:
+    post:
+      operationId: resumeInvestigation
+      summary: Resume an investigation paused at a human-approval interrupt()
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResumeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestigationResponse"
+
+  /threads/{thread_id}:
+    get:
+      operationId: getThreadState
+      summary: Reopen a parked investigation, including one paused before a restart
+      parameters:
+        - name: thread_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreadState"
+
+  /sessions/{session_id}/events:
+    get:
+      operationId: getSessionEvents
+      summary: Structured session events for evidence, audit, and timing review
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                  events:
+                    type: array
+                    items:
+                      $ref: "../session/AgentSessionEvent.schema.json"
+
+  /capabilities:
+    get:
+      operationId: listCapabilities
+      summary: Governed MCP tools available to this workflow runtime (introspection only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  capabilities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        description:
+                          type: string
+
+  /workspaces:
+    post:
+      operationId: createWorkspace
+      summary: >-
+        Create a workspace for the traditional (non-agentic) deep-dive view.
+        Backs the Java facade's WorkspaceService.createWorkspace().
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id:
+                    type: string
+
+  /workspaces/{workspace_id}/filters:
+    post:
+      operationId: addWorkspaceFilters
+      summary: Apply filters to a workspace. Backs WorkspaceService.addFilters().
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filters]
+              properties:
+                filters:
+                  type: object
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /workspaces/{workspace_id}/register:
+    post:
+      operationId: registerDataset
+      summary: >-
+        Register a dataset/table for the workspace (approved=true; this route
+        is the direct-access equivalent of the graph's approve_registration +
+        register_and_wait nodes). Backs RegistrationService.register().
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataset, table]
+              properties:
+                dataset:
+                  type: string
+                table:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [IN_PROGRESS, READY]
+                  workspace_id:
+                    type: string
+                  progress_pct:
+                    type: integer
+                  table:
+                    type: string
+
+  /workspaces/{workspace_id}/wafers/query:
+    post:
+      operationId: queryWafers
+      summary: Query wafer-level data for a registered workspace/table. Backs WaferDataService.query().
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [table]
+              properties:
+                table:
+                  type: string
+                filters:
+                  type: object
+                  nullable: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id:
+                    type: string
+                  table:
+                    type: string
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                  anomalous_wafers:
+                    type: array
+                    items:
+                      type: string
+
+components:
+  schemas:
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        thread_id:
+          type: string
+          nullable: true
+
+    ResumeRequest:
+      type: object
+      required: [thread_id, decision]
+      properties:
+        thread_id:
+          type: string
+        decision:
+          description: >-
+            Either a boolean approve/reject, or an object such as
+            {"approved": true, "limit_value": 3.2} for a threshold clarification.
+          nullable: true
+
+    TrendSeries:
+      type: object
+      properties:
+        machine:
+          type: string
+        product:
+          type: string
+        lot_id:
+          type: string
+          nullable: true
+        layer_id:
+          type: string
+          nullable: true
+        exposure_equipment_id:
+          type: string
+          nullable: true
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date-time
+              kpi_value:
+                type: number
+              lot_id:
+                type: string
+                nullable: true
+
+    Evidence:
+      type: object
+      description: >-
+        Read from graph state, never from model prose, so it cannot be
+        fabricated. Field set mirrors application_ui/opo_monitoring_service/api.py::_evidence.
+      properties:
+        mode:
+          type: string
+          nullable: true
+        limit_value:
+          type: number
+          nullable: true
+        requested_limit_value:
+          type: number
+          nullable: true
+        direction:
+          type: string
+          nullable: true
+        threshold_unit:
+          type: string
+          nullable: true
+        baseline_deviation_pct:
+          type: number
+          nullable: true
+        threshold_context:
+          type: object
+          nullable: true
+        threshold_recommendation:
+          type: object
+          nullable: true
+        interpretation:
+          type: string
+          nullable: true
+        lookback_days:
+          type: integer
+          nullable: true
+        machine_id:
+          type: string
+          nullable: true
+        lot_id:
+          type: string
+          nullable: true
+        product_id:
+          type: string
+          nullable: true
+        layer_id:
+          type: string
+          nullable: true
+        exposure_equipment_id:
+          type: string
+          nullable: true
+        trend_series:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrendSeries"
+          nullable: true
+        analysis:
+          type: array
+          items:
+            type: object
+          nullable: true
+        outliers:
+          type: array
+          items:
+            type: object
+          nullable: true
+        selected_outlier:
+          type: object
+          nullable: true
+        workspace_id:
+          type: string
+          nullable: true
+        filters:
+          type: object
+          nullable: true
+        registration:
+          type: object
+          nullable: true
+        registration_history:
+          type: array
+          items:
+            type: object
+          nullable: true
+        anomalous_wafers:
+          type: array
+          items:
+            type: string
+          nullable: true
+        wafer_rows:
+          type: array
+          items:
+            type: object
+          nullable: true
+
+    InvestigationResponse:
+      type: object
+      required: [thread_id, status, evidence]
+      properties:
+        thread_id:
+          type: string
+        status:
+          type: string
+          enum: [awaiting_human, cancelled, no_outliers, complete]
+        request:
+          description: The interrupt() payload, present only when status is awaiting_human.
+          type: object
+          nullable: true
+        cancelled_at:
+          type: string
+          nullable: true
+        findings:
+          description: ../model/FindingsSummary.schema.json, present only when status is complete.
+          type: object
+          nullable: true
+        evidence:
+          $ref: "#/components/schemas/Evidence"
+
+    ThreadState:
+      type: object
+      properties:
+        thread_id:
+          type: string
+        status:
+          type: string
+          enum: [awaiting_human, idle]
+        request:
+          type: object
+          nullable: true
+        values:
+          type: object

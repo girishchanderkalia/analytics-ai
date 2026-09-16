@@ -1,0 +1,37 @@
+# Exposes app-ui-service (the Java facade) through the cluster's shared Istio
+# ingress gateway (istio-system/ingress-prod), which runs on the k8s_edge
+# nodes (asml.com/vcp-node-type=k8s_edge, e.g. ics027032213), reachable at
+# http://ics027032213.ics-eu-1.asml.com/ai/...
+#
+# Mirrors the cluster-wide convention (see e.g.
+# analytics-fnd-gateway-prod/vcp-ingress-prod-foundation-framework-api-gateway-service):
+# one shared wildcard-host Gateway, disambiguated per app by URL path prefix.
+# Confirmed no other VirtualService in the cluster claims the `/ai` prefix
+# before adding this (see PLAN.md "Ingress exposure").
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: vcp-ingress-ai-agents-app-ui-service
+  namespace: ai-agents
+spec:
+  gateways:
+    - istio-system/ingress-prod
+  hosts:
+    - "*"
+  http:
+    - match:
+        - uri:
+            regex: /ai(/|$)(.*)
+      # `rewrite.uri` does a literal replace, not a regex substitution; the
+      # arbitrary suffix (e.g. /trends, /chat) must be preserved via
+      # uriRegexRewrite's backreference instead (Istio >=1.11; this cluster
+      # runs 1.24).
+      rewrite:
+        uriRegexRewrite:
+          match: ^/ai(?:/|$)(.*)$
+          rewrite: /\1
+      route:
+        - destination:
+            host: app-ui-service.ai-agents.svc.cluster.local
+            port:
+              number: 8090

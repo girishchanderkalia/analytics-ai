@@ -1,0 +1,17 @@
+server:
+  port: 8090
+
+workflow-runtime:
+  # Python workflow runtime base URL (application_ui/opo_monitoring_service/api.py).
+  # See ../contracts/workflow-runtime-api/openapi.yaml for the contract.
+  base-url: http://127.0.0.1:8100
+
+# The Python side's JSON contract uses snake_case (lot_id, thread_id, ...);
+# this maps it to/from the DTOs' camelCase fields without per-field @JsonProperty.
+spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+logging:
+  level:
+    com.asml.analytics.facade: INFO

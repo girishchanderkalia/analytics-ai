@@ -1,0 +1,41 @@
+# Applied only into the pre-existing `ai-agents` namespace, per
+# .github/copilot-instructions.md `## 9 Deployment`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-ui-service
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-ui-service
+  template:
+    metadata:
+      labels:
+        app: app-ui-service
+    spec:
+      containers:
+        - name: facade
+          image: repo.cluster.local:5443/ai-agents/app-ui-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8090
+          env:
+            - name: WORKFLOWRUNTIME_BASEURL
+              value: http://analytics-workflow-runtime:8100
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-ui-service
+  namespace: ai-agents
+spec:
+  selector:
+    app: app-ui-service
+  ports:
+    - port: 8090
+      targetPort: 8090
+  # Change to LoadBalancer/NodePort/Ingress as appropriate for the cluster;
+  # this is the only service the app/UI is meant to reach (see language
+  # boundary in .github/copilot-instructions.md `### 2.1`).

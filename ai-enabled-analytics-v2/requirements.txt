@@ -1,0 +1,23 @@
+# Agent Runtime Framework
+langgraph>=1.2
+langgraph-checkpoint-postgres>=2.0
+psycopg[binary,pool]>=3.2
+
+# Application agent layer (PydanticAI)
+pydantic-ai>=0.1
+pydantic-settings>=2.15
+
+# MCP Capability Adaptor
+# Pinned below 2.0: mcp 2.x renamed FastMCP to MCPServer and changed its import
+# path (mcp.server.fastmcp -> mcp.server.mcpserver); server_*.py in
+# mcp_capability_adaptor/ still uses the 1.x FastMCP API.
+mcp>=1.6,<2
+
+# Application UI / BFF
+fastapi>=0.141
+uvicorn>=0.52
+plotly>=7.0
+
+# Model gateway credentials
+azure-identity>=1.25
+azure-keyvault-secrets>=4.11

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/session/Memory.schema.json",
+  "title": "Memory",
+  "description": "One row from the memory table (db/schema.sql), a durable key/value note scoped to a session.",
+  "type": "object",
+  "required": ["memory_key", "value"],
+  "properties": {
+    "memory_key": { "type": "string" },
+    "session_id": { "type": ["string", "null"] },
+    "value": { "type": "object", "description": "Arbitrary JSON value; shape is caller-defined." },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}
