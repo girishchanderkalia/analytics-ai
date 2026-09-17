@@ -8,3 +8,11 @@ agent_sessions.sqlite*
 .opo-monitoring.log
 .vscode/
 AnalyticsFoundation/mock_data/datawarehouse_wafers.json
+
+# ai-enabled-analytics-v2/app-ui-service (Maven/Java build output)
+target/
+*.class
+
+# v2 local dev / deploy scratch (docker save output, never committed)
+ai-enabled-analytics-v2/deploy/*.tar
+

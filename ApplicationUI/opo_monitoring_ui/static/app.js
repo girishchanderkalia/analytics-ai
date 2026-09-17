@@ -216,6 +216,8 @@ function setBusy(value, label) {
 function renderGate(request) {
   const isConfirm = request.type === "confirm_investigation";
   const isThreshold = request.type === "clarify_absolute_threshold";
+  const isSelectAction = request.type === "select_next_action";
+  const isAwaitCommand = request.type === "await_next_command";
 
   let detail;
   let selector = "";
@@ -240,10 +242,19 @@ function renderGate(request) {
       <div class="threshold-rationale">${escapeHtml(request.rationale || "")}</div>`;
     selector = `<input id="threshold-input" type="number" min="0" step="0.001"
       value="${escapeHtml(request.suggested_limit_value)}" aria-label="Selected absolute OPO KPI cutoff" />`;
+  } else if (isSelectAction) {
+    detail = `Pick one of the model's own recommended next actions, or end the investigation here.`;
+    selector = `<select id="next-action-select">${request.options
+      .map((opt) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`)
+      .join("")}</select>`;
+  } else if (isAwaitCommand) {
+    detail = `<code>${escapeHtml(request.series_count)}</code> series &middot;
+      <code>${escapeHtml(request.point_count)}</code> points shown above.`;
+    selector = `<input id="next-command-input" type="text"
+      placeholder="e.g. show outliers, show outliers above 3, or refine the filters"
+      aria-label="What would you like to do next?" />`;
   } else {
-    detail = `Workspace <code>${escapeHtml(request.workspace_id)}</code> &middot;
-      dataset <code>${escapeHtml(request.dataset)}</code> &middot;
-      filters <code>${escapeHtml(JSON.stringify(request.filters))}</code>`;
+    detail = "";
   }
 
   interactionPanel.hidden = false;
@@ -254,8 +265,8 @@ function renderGate(request) {
       <div class="gate-detail">${detail}</div>
       ${selector}
       <div class="gate-actions">
-        <button data-action="approve">Use selected cutoff</button>
-        <button data-action="reject" class="reject">Reject</button>
+        <button data-action="approve">${isSelectAction || isAwaitCommand ? "Continue" : "Use selected cutoff"}</button>
+        ${isSelectAction || isAwaitCommand ? "" : '<button data-action="reject" class="reject">Reject</button>'}
       </div>
     </div>`;
   const gate = interactionPanel;
@@ -271,13 +282,29 @@ function renderGate(request) {
       resolveGate(gate, "Cutoff approved", { approved: true, limit_value: value });
       return;
     }
+    if (isSelectAction) {
+      const select = gate.querySelector("#next-action-select");
+      resolveGate(gate, "Selected", { action: select?.value });
+      return;
+    }
+    if (isAwaitCommand) {
+      const input = gate.querySelector("#next-command-input");
+      const value = input?.value.trim();
+      if (!value) {
+        input?.focus();
+        return;
+      }
+      addNode("msg user", escapeHtml(value));
+      resolveGate(gate, "Sent", { message: value });
+      return;
+    }
     const select = document.getElementById("outlier-select");
     const decision = { approved: true };
     if (isConfirm && select) decision.machine = select.value;
     resolveGate(gate, "Approved", decision);
   };
-  gate.querySelector('[data-action="reject"]').onclick = () =>
-    resolveGate(gate, "Rejected", { approved: false });
+  gate.querySelector('[data-action="reject"]')?.addEventListener("click", () =>
+    resolveGate(gate, "Rejected", { approved: false }));
 }
 
 function resolveGate(gateNode, label, decision) {
@@ -346,6 +373,16 @@ function renderEvidence(evidence) {
           <td>${escapeHtml(r.overlay_magnitude_um)}</td>
         </tr>`).join("")}
     </table></div>`;
+  }
+
+  if (evidence.spatial_pattern && evidence.spatial_pattern.pattern !== "no_data") {
+    const sp = evidence.spatial_pattern;
+    html += `<div class="card"><h3>Spatial pattern</h3>
+      <div class="kv"><span>Pattern</span><span>${escapeHtml(sp.pattern)}</span></div>
+      <div class="kv"><span>Edge points</span><span>${escapeHtml(sp.edge_count)}</span></div>
+      <div class="kv"><span>Center points</span><span>${escapeHtml(sp.center_count)}</span></div>
+      <div class="kv"><span>Edge fraction</span><span>${escapeHtml(sp.edge_fraction)}</span></div>
+    </div>`;
   }
 
   if (html) evidencePane.innerHTML = html;
@@ -650,6 +687,7 @@ document.getElementById("composer").onsubmit = (event) => {
   if (busy) return;
   const message = messageInput.value.trim();
   if (!message) return;
+  const useToolCalling = document.getElementById("tool-calling-toggle").checked;
   threadId = null;
   timeline.innerHTML = "";
   interactionPanel.hidden = true;
@@ -660,7 +698,7 @@ document.getElementById("composer").onsubmit = (event) => {
   evidencePane.innerHTML = '<div class="empty-state small"><p>No evidence yet.</p></div>';
   drawPlot(null, null);
   addNode("msg user", escapeHtml(message));
-  send("/chat", { message }, "Analysing trends…");
+  send("/chat", { message, use_tool_calling: useToolCalling }, "Analysing trends…");
 };
 
 toggleRightPanel.onclick = () => {

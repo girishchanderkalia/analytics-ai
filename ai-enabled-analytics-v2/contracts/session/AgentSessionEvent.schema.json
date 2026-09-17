@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/session/AgentSessionEvent.schema.json",
+  "title": "AgentSessionEvent",
+  "description": "One row from the agent_session_events table (foundation/session_manager.py), as returned by GET /sessions/{session_id}/events.",
+  "type": "object",
+  "required": ["event_id", "session_id", "event_type", "timestamp", "source", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "description": "e.g. EV-AB12CD34EF56" },
+    "session_id": { "type": "string" },
+    "event_type": {
+      "type": "string",
+      "description": "One of the event types recorded by agent_runtime.graph / application_ui.api, e.g. model_call, model_interpretation, threshold_recommendation, tool_invocation, tool_result, user_request, human_decision, evidence_item, final_finding, workflow_error, workflow_timing."
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "duration_ms": { "type": ["number", "null"] },
+    "source": { "type": "string", "enum": ["application", "platform"] },
+    "payload": {
+      "type": "object",
+      "description": "Event-type-specific JSON payload; shape varies by event_type and is not further constrained here."
+    }
+  }
+}

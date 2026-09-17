@@ -68,6 +68,10 @@
       </div>
       <form id="composer" class="composer">
         <div id="interaction-panel" class="interaction-panel" hidden></div>
+        <label class="tool-calling-toggle">
+          <input id="tool-calling-toggle" type="checkbox" />
+          Let model call the stats tool directly (agentic)
+        </label>
         <input id="message-input" type="text" value="Show me trends and outliers"
           placeholder="e.g. outliers above 3 for NXE3600 in the last 7 days" autocomplete="off" />
         <button id="send-btn" type="submit">Start</button>

@@ -1,0 +1,98 @@
+@startuml OSS-Aligned Target Interaction
+
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontColor #0F172A
+skinparam ArrowColor #1E40AF
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+skinparam component {
+  FontColor #0F172A
+  BorderColor #1E3A8A
+  BackgroundColor #EFF6FF
+}
+skinparam package {
+  FontColor #0F172A
+  BorderColor #1E40AF
+  BackgroundColor #FFFFFF
+}
+
+title Target Interaction: Application Agent
+caption The application owns agent semantics; Analytics Foundation owns the runtime, governed capability access, and platform services.
+
+package "Application UI\nApplicationUI/opo_monitoring_ui" #FFFFFF {
+  component "Application UI\nTraditional + conversational views\ntrend + wafer visualization" as ui #E0F2FE
+  component "Application BFF\napi.py\nHTTP endpoints + display routes" as bff #DCFCE7
+  ui -down-> bff : HTTP / JSON
+}
+
+package "Analytics Foundation AI Enablement\nFoundation-owned runtime + governance" #E0F2FE {
+  package "Agent Runtime Framework" #F8FAFC {
+    component "LangGraph\nStateGraph | checkpoints\ninterrupts | resume" as workflow #DBEAFE
+    component "Application Agent\nPydanticAI\nintent -> DetectionScope\nevidence -> FindingsSummary" as agent #BBF7D0
+  }
+
+  component "MCP Capability Adaptor\nModel Context Protocol\ntyped tools | validation | policy" as mcp #DBEAFE
+  component "Model Gateway\nprovider + Key Vault credentials" as model_gateway #DBEAFE
+  component "Session Manager\nsession_memory.py\nsession | audit | evidence" as sessionmem #DBEAFE
+}
+
+package "Analytics Foundation Service APIs\nPublic application-facing capability surface" #FFFFFF {
+  package "Foundation APIs" #F8FAFC {
+    component "Assets API\nasset metadata" as assets_api #E0E7FF
+    component "Workspace API\nworkspace | filters | registration" as workspace_api #E0E7FF
+    component "Query Engine API\nquery connection | provisioning" as query_api #E0E7FF
+    component "Processing API\nprocessing lifecycle" as processing_api #E0E7FF
+  }
+
+  database "PostgreSQL + StarRocks\nKPI and wafer analytics" as analytical_data #E0E7FF
+}
+
+cloud "AI Models\nASML-hosted deployment" as models #F8FAFC
+
+database "PostgreSQL Runtime State" as postgres #F8FAFC {
+  component "LangGraph checkpoints\nresumable graph state" as pg_checkpoints #F8FAFC
+  component "Sessions | audit | evidence | memory\nhuman-readable event trail" as pg_sessions #F8FAFC
+}
+
+bff -right-> workflow : invoke graph / resume
+workflow -down-> agent : typed intent + evidence
+agent -down-> model_gateway : typed model run
+model_gateway -down-> models : HTTPS
+workflow -right-> mcp : governed MCP tool calls
+mcp -right-> assets_api : HTTPS
+mcp -right-> workspace_api : HTTPS
+mcp -right-> query_api : HTTPS / JDBC
+mcp -right-> processing_api : HTTPS
+workspace_api -down-> analytical_data : registered access
+query_api -down-> analytical_data : governed queries
+workflow -down-> pg_checkpoints : PostgresSaver
+workflow -down-> sessionmem : model/tool/finding events
+bff -down-> sessionmem : request/evidence/decision events
+sessionmem -down-> pg_sessions : SQL writes
+bff ..right.> query_api : GET /trends for display\nno agent or MCP
+
+note bottom of agent
+  Application-owned: intent semantics, detection scope,
+  evidence meaning, and findings only. No API, database,
+  credential, checkpoint, or audit access.
+end note
+
+note bottom of mcp
+  The agent-facing adaptor, not a replacement transport.
+  It maps bounded tool calls to the Foundation's existing
+  HTTPS and JDBC interfaces. Hive and Kafka are internal,
+  therefore not exposed as MCP tools.
+end note
+
+note bottom of postgres
+  Checkpoints resume execution. Session Manager records
+  the evidence and audit trail. These are separate tables
+  in one PostgreSQL runtime-state store.
+end note
+
+@enduml

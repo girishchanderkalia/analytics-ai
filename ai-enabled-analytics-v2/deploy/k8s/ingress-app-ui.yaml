@@ -1,0 +1,67 @@
+# Exposes the browser UI (served today by analytics-workflow-runtime, per
+# PLAN.md's language boundary this is an interim arrangement until
+# app-ui-service serves the UI itself) through the same shared edge
+# Gateway, at http://ics027032213.ics-eu-1.asml.com/ai-ui/...
+#
+# CAVEAT: ApplicationUI/opo_monitoring_ui/static/index.html and app.js
+# (off-limits, original demonstrator) hardcode ABSOLUTE paths - not just for
+# static assets (/static/.., /vendor/plotly.js) but for EVERY API call the
+# page makes (/trends, /chat, /resume, /threads/{id}, /sessions/{id}/events,
+# /capabilities). None of it has any concept of being served under a path
+# prefix. Rewriting /ai-ui -> / makes the page itself load, but every
+# follow-up request the page's own JS makes goes out unprefixed against
+# whatever host the browser is on - so this VirtualService also claims those
+# exact bare paths on the shared wildcard host to make the UI functional end
+# to end. Confirmed (see PLAN.md) no other VirtualService in the cluster
+# claims any of these paths today - but they are fairly generic names on a
+# MULTI-TENANT shared gateway; a future unrelated app claiming any of
+# /trends, /chat, /resume, /threads, /sessions, /capabilities, /static, or
+# /vendor would collide with this one. Treat this whole VirtualService as an
+# interim/test convenience, not a long-term exposure - the target state is
+# app-ui-service (behind its own /ai prefix, no absolute-path assumptions)
+# serving the UI instead (see PLAN.md Phase 6, still open).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: vcp-ingress-ai-agents-app-ui
+  namespace: ai-agents
+spec:
+  gateways:
+    - istio-system/ingress-prod
+  hosts:
+    - "*"
+  http:
+    - match:
+        - uri:
+            regex: /ai-ui(/|$)(.*)
+      rewrite:
+        uriRegexRewrite:
+          match: ^/ai-ui(?:/|$)(.*)$
+          rewrite: /\1
+      route:
+        - destination:
+            host: analytics-workflow-runtime.ai-agents.svc.cluster.local
+            port:
+              number: 8100
+    - match:
+        - uri:
+            prefix: /static/
+        - uri:
+            prefix: /vendor/
+        - uri:
+            exact: /trends
+        - uri:
+            exact: /chat
+        - uri:
+            exact: /resume
+        - uri:
+            exact: /capabilities
+        - uri:
+            prefix: /threads/
+        - uri:
+            prefix: /sessions/
+      route:
+        - destination:
+            host: analytics-workflow-runtime.ai-agents.svc.cluster.local
+            port:
+              number: 8100

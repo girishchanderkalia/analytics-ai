@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/FindingsSummary.schema.json",
+  "properties": {
+    "finding": {
+      "description": "One concise finding, stated only from the supplied evidence.",
+      "title": "Finding",
+      "type": "string"
+    },
+    "evidence_references": {
+      "description": "Evidence labels supporting the finding, chosen from the labels supplied in the prompt.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence References",
+      "type": "array"
+    },
+    "confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Confidence",
+      "type": "string"
+    },
+    "limitations": {
+      "description": "Important limitations or missing data that affect interpretation.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "recommended_next_actions": {
+      "description": "Concrete next actions grounded in the evidence.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Recommended Next Actions",
+      "type": "array"
+    },
+    "alternative_explanations": {
+      "description": "Plausible alternatives that are not ruled out by the evidence.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Alternative Explanations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "finding",
+    "evidence_references",
+    "confidence",
+    "limitations",
+    "recommended_next_actions",
+    "alternative_explanations"
+  ],
+  "title": "FindingsSummary",
+  "type": "object"
+}

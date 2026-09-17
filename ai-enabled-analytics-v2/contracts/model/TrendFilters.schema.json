@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/TrendFilters.schema.json",
+  "description": "Which trend-chart filters the analyst named, from a free-text display request.",
+  "properties": {
+    "lookback_days": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Relative lookback in days, e.g. 7 for 'last 7 days'. Null when the analyst gave an explicit date range instead, or named no date filter at all (then the default of 14 days is used).",
+      "title": "Lookback Days"
+    },
+    "start_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Explicit ISO date (YYYY-MM-DD) range start, only when the analyst named an explicit date range (e.g. 'from 12-02-2025 to 12-02-2026') instead of a relative lookback. Null otherwise.",
+      "title": "Start Date"
+    },
+    "end_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Explicit ISO date (YYYY-MM-DD) range end, paired with start_date. Null otherwise.",
+      "title": "End Date"
+    },
+    "lot_ids": {
+      "description": "Lot IDs named by the analyst (e.g. 'lot1, lot2, lot3'). Empty list means all lots.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Lot Ids",
+      "type": "array"
+    },
+    "product_ids": {
+      "description": "Product IDs named by the analyst. Empty list means all products.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Product Ids",
+      "type": "array"
+    },
+    "layer_ids": {
+      "description": "Layer IDs named by the analyst. Empty list means all layers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Layer Ids",
+      "type": "array"
+    },
+    "exposure_equipment_ids": {
+      "description": "Exposure equipment (machine) IDs named by the analyst. Empty list means all machines.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Exposure Equipment Ids",
+      "type": "array"
+    },
+    "interpretation": {
+      "description": "One short sentence stating which filters were applied, or that defaults were used.",
+      "title": "Interpretation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "interpretation"
+  ],
+  "title": "TrendFilters",
+  "type": "object"
+}

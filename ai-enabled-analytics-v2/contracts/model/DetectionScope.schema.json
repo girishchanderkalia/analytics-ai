@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/DetectionScope.schema.json",
+  "description": "How the analyst asked for outliers to be identified, within the trend filters\nalready established by ``TrendFilters``.",
+  "properties": {
+    "mode": {
+      "description": "Use 'absolute' when the analyst names a KPI threshold, e.g. 'outliers below 3.0' or 'anything above 3.2'. Use 'baseline' when they ask for outliers without naming a number, meaning each machine should be compared against its own normal level.",
+      "enum": [
+        "absolute",
+        "baseline"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "limit_value": {
+      "description": "The KPI threshold named by the analyst, used only when mode is 'absolute'. If no number was named, use 3.0.",
+      "title": "Limit Value",
+      "type": "number"
+    },
+    "direction": {
+      "description": "Which side of the limit to mark, used only when mode is 'absolute'. 'below' for under/below/less than/worse than, 'above' for over/above/more than/better than. Default 'below'.",
+      "enum": [
+        "below",
+        "above"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "threshold_unit": {
+      "description": "Unit for a numeric threshold: use 'percent' for a relative deviation, otherwise use 'absolute' for the OPO KPI value.",
+      "enum": [
+        "percent",
+        "absolute"
+      ],
+      "title": "Threshold Unit",
+      "type": "string"
+    },
+    "baseline_deviation_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Percentage deviation above a machine's own median that counts as abnormal, used only when mode is 'baseline'. Return null when the analyst did not specify it.",
+      "title": "Baseline Deviation Pct"
+    },
+    "interpretation": {
+      "description": "One short sentence stating how the request was read, including which rule was applied, so the analyst can check it.",
+      "title": "Interpretation",
+      "type": "string"
+    },
+    "suggested_limit_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only when the analyst did not name an explicit numeric threshold: an absolute OPO KPI outlier cutoff recommended from the supplied empirical context (p95, p99, mean, stdev, bell_curve_range). Prefer p95 for a broader screening threshold, p99 for severe anomalies, or the bell_curve_range upper bound when the distribution's spread is wide. Null when the analyst already named a number.",
+      "title": "Suggested Limit Value"
+    },
+    "suggested_limit_rationale": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One short explanation for suggested_limit_value, grounded only in the supplied p95/p99/mean/stdev/bell_curve_range values. Null when suggested_limit_value is null.",
+      "title": "Suggested Limit Rationale"
+    }
+  },
+  "required": [
+    "mode",
+    "limit_value",
+    "direction",
+    "threshold_unit",
+    "baseline_deviation_pct",
+    "interpretation"
+  ],
+  "title": "DetectionScope",
+  "type": "object"
+}

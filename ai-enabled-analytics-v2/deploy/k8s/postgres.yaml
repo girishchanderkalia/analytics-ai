@@ -1,0 +1,81 @@
+# Applied only into the pre-existing `ai-agents` namespace, per
+# .github/copilot-instructions.md `## 9 Deployment`. Does not create the
+# namespace itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-postgres
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-postgres
+  template:
+    metadata:
+      labels:
+        app: analytics-postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: repo.cluster.local:5443/ai-agents/postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-postgres-credentials
+                  key: password
+            - name: POSTGRES_DB
+              value: ai_enabled_analytics_v2
+            # Longhorn mounts the PVC root with a `lost+found` dir, which trips
+            # initdb if PGDATA points at the mount root directly - use a subdir.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: schema
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: analytics-postgres-data
+        - name: schema
+          configMap:
+            name: analytics-postgres-schema
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-postgres
+  namespace: ai-agents
+spec:
+  selector:
+    app: analytics-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: analytics-postgres-data
+  namespace: ai-agents
+spec:
+  storageClassName: longhorn
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+# Create the schema ConfigMap and password Secret out-of-band, e.g.:
+#   kubectl create configmap analytics-postgres-schema -n ai-agents \
+#     --from-file=01-schema.sql=db/schema.sql
+#   kubectl create secret generic analytics-postgres-credentials -n ai-agents \
+#     --from-literal=password=<generated>
