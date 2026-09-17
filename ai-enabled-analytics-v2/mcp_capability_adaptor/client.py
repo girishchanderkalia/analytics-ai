@@ -76,3 +76,27 @@ def read_trends(table: str | None = None, connection_info: dict[str, Any] | None
     return _call_tool_sync(
         server_analytics_api.mcp, "read_trends", {"table": table, "connection_info": connection_info}
     )
+
+
+def get_kpi_distribution_stats(
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    return _call_tool_sync(
+        server_analytics_api.mcp,
+        "get_kpi_distribution_stats",
+        {
+            "days": days,
+            "start_date": start_date,
+            "end_date": end_date,
+            "lot_ids": lot_ids,
+            "product_ids": product_ids,
+            "layer_ids": layer_ids,
+            "exposure_equipment_ids": exposure_equipment_ids,
+        },
+    )

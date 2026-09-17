@@ -27,10 +27,28 @@ spec:
                 secretKeyRef:
                   name: analytics-workflow-runtime-secrets
                   key: database-url
+            - name: ASML_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-workflow-runtime-secrets
+                  key: api-key
             - name: ASML_AI_KEY_VAULT_URL
               value: https://ssa-prd-proj-15528-01-kv.vault.azure.net/
             - name: ASML_AI_SECRET_NAME
               value: ssa-ai-key
+            # httpx (used by the model gateway's openai client) reads this env var and
+            # trusts it in place of certifi's bundle - needed because platform.ai.asml.com
+            # sits behind ASML's intranet PKI, which isn't in the base image's trust store.
+            - name: SSL_CERT_FILE
+              value: /etc/ssl/asml/combined-ca-bundle.pem
+          volumeMounts:
+            - name: asml-ca-bundle
+              mountPath: /etc/ssl/asml
+              readOnly: true
+      volumes:
+        - name: asml-ca-bundle
+          configMap:
+            name: asml-ca-bundle
 ---
 apiVersion: v1
 kind: Service

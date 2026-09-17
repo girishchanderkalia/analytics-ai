@@ -6,6 +6,21 @@ the model could skip or fabricate. Application agents (typed PydanticAI agents)
 are used only to interpret intent and summarize findings. Human gates are
 ``interrupt()`` points, resumable via the PostgreSQL-backed checkpointer.
 
+4-step conversational flow (one open thread spans all steps, via repeated
+``/resume`` calls carrying the analyst's next free-text message):
+  1. ``parse_trend_request`` parses display filters and shows the trend chart -
+     no approval needed, since displaying data draws no conclusion.
+  2. ``await_next_command`` pauses for the analyst's next message. If it names
+     an explicit numeric threshold, ``parse_outlier_command`` applies it directly;
+     otherwise ``confirm_absolute_threshold`` asks the analyst to approve a
+     model-suggested cutoff first.
+  3. ``confirm_investigation`` asks the analyst to approve/pick one of the
+     flagged outliers, then the deep-dive (workspace/registration/wafer query)
+     runs automatically - no approval for workspace creation or dataset
+     registration, since that is internal plumbing, not an analyst decision.
+  4. ``summarise`` produces the findings, then ``offer_next_actions`` asks the
+     analyst which of the model's own recommended next actions to take.
+
 Differences from the original, per the target architecture:
 - All data access goes through ``mcp_capability_adaptor.client`` (MCP tools),
   never a direct platform client import.
@@ -17,13 +32,13 @@ Differences from the original, per the target architecture:
 
 import logging
 import re
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from agent_runtime.application_agent.agents import parse_scope as agent_parse_scope
-from agent_runtime.application_agent.agents import summarize_findings
+from agent_runtime.application_agent.agents import parse_trend_filters, summarize_findings
 from agent_runtime.application_agent.contracts import (
     DEFAULT_BASELINE_DEVIATION_PCT,
     DEFAULT_LIMIT_VALUE,
@@ -44,6 +59,15 @@ def _keep_last(_current: Any, incoming: Any) -> Any:
 
 class InvestigationState(TypedDict, total=False):
     question: str
+    next_command: str | None
+    use_tool_calling: bool
+    lookback_days: int | None
+    start_date: str | None
+    end_date: str | None
+    lot_ids: list[str]
+    product_ids: list[str]
+    layer_ids: list[str]
+    exposure_equipment_ids: list[str]
     mode: str
     limit_value: float
     requested_limit_value: float
@@ -51,12 +75,6 @@ class InvestigationState(TypedDict, total=False):
     threshold_unit: str
     baseline_deviation_pct: float
     interpretation: str
-    lookback_days: int
-    machine_id: str | None
-    lot_id: str | None
-    product_id: str | None
-    layer_id: str | None
-    exposure_equipment_id: str | None
     threshold_context: dict
     threshold_recommendation: dict
     needs_threshold_clarification: bool
@@ -70,6 +88,8 @@ class InvestigationState(TypedDict, total=False):
     registration_history: Annotated[list[dict], _keep_last]
     wafer_data: dict
     findings: dict
+    selected_action: str | None
+    spatial_pattern: dict
     cancelled_at: str
 
 
@@ -81,15 +101,133 @@ def _is_approved(decision: Any) -> bool:
     return bool(decision)
 
 
-def parse_scope(state: InvestigationState) -> InvestigationState:
-    """Choose the detection rule from the analyst's phrasing; detection itself stays in code.
+def _filter_kwargs(state: InvestigationState) -> dict[str, Any]:
+    """The trend-chart filters established in step 1, reused by every later step."""
+    return {
+        "days": state.get("lookback_days"),
+        "start_date": state.get("start_date"),
+        "end_date": state.get("end_date"),
+        "lot_ids": state.get("lot_ids"),
+        "product_ids": state.get("product_ids"),
+        "layer_ids": state.get("layer_ids"),
+        "exposure_equipment_ids": state.get("exposure_equipment_ids"),
+    }
 
-    Does not itself call ``interrupt()``: LangGraph re-executes a node's entire function
-    body (including any LLM calls) from the top every time that node resumes from an
-    interrupt, so the interrupt for an absolute-threshold clarification lives in the
-    separate, minimal ``confirm_absolute_threshold`` node below instead.
+
+def parse_trend_request(state: InvestigationState) -> InvestigationState:
+    """Step 1: parse trend-chart filters from free text and display the chart.
+
+    No ``interrupt()`` here - displaying data draws no conclusion, so it needs no
+    approval. The analyst's next message is collected separately by
+    ``await_next_command`` below.
     """
-    question = state.get("question", "")
+    question = state.get("next_command") or state.get("question", "")
+
+    lookback_days: int | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    lot_ids: list[str] = []
+    product_ids: list[str] = []
+    layer_ids: list[str] = []
+    exposure_equipment_ids: list[str] = []
+    interpretation = "No filters named, so the default last 14 days across all lots/products/layers/machines is shown."
+
+    try:
+        with session_manager.timed_event("model_call", {"purpose": "trend_filter_interpretation"}):
+            filters = parse_trend_filters(question)
+        lookback_days = filters.lookback_days
+        start_date = filters.start_date
+        end_date = filters.end_date
+        lot_ids = filters.lot_ids
+        product_ids = filters.product_ids
+        layer_ids = filters.layer_ids
+        exposure_equipment_ids = filters.exposure_equipment_ids
+        interpretation = filters.interpretation
+        session_manager.record_event(
+            "model_interpretation",
+            {"request": question, "interpretation": filters.model_dump()},
+            source="application",
+        )
+    except Exception:
+        log.warning("Could not parse trend filters from %r; using defaults", question, exc_info=True)
+        session_manager.record_event(
+            "model_interpretation",
+            {"request": question, "interpretation": "fallback_defaults", "fallback": True},
+            source="application",
+        )
+
+    if lookback_days is not None:
+        lookback_days = min(max(int(lookback_days), 1), 90)
+
+    trend_series = services.get_trend_series(
+        days=lookback_days,
+        start_date=start_date,
+        end_date=end_date,
+        lot_ids=lot_ids,
+        product_ids=product_ids,
+        layer_ids=layer_ids,
+        exposure_equipment_ids=exposure_equipment_ids,
+    )
+
+    return {
+        "question": question,
+        "lookback_days": lookback_days,
+        "start_date": start_date,
+        "end_date": end_date,
+        "lot_ids": lot_ids,
+        "product_ids": product_ids,
+        "layer_ids": layer_ids,
+        "exposure_equipment_ids": exposure_equipment_ids,
+        "interpretation": interpretation,
+        "trend_series": trend_series,
+    }
+
+
+def await_next_command(state: InvestigationState) -> InvestigationState:
+    """Pause and wait for the analyst's next free-text message.
+
+    Kept minimal - the interrupt is the first statement - so resuming does not
+    re-run any model call. The resumed value can be a plain string or
+    ``{"message": "..."}``; either way it becomes ``next_command``.
+    """
+    trend_series = state.get("trend_series") or []
+    decision = interrupt(
+        {
+            "type": "await_next_command",
+            "question": (
+                "Trend chart ready. What would you like to do next? "
+                "(e.g. 'show outliers', 'show outliers above 3', or refine the filters)"
+            ),
+            "series_count": len(trend_series),
+            "point_count": sum(len(s.get("points", [])) for s in trend_series),
+        }
+    )
+    text = decision.get("message") if isinstance(decision, dict) else str(decision or "")
+    return {"next_command": text}
+
+
+_OUTLIER_KEYWORDS = ("outlier", "anomal", "extreme")
+
+
+def _mentions_outliers(text: str) -> bool:
+    lowered = text.lower()
+    return any(keyword in lowered for keyword in _OUTLIER_KEYWORDS)
+
+
+def parse_outlier_command(state: InvestigationState) -> InvestigationState:
+    """Step 2: interpret an outlier-detection request, within the filters step 1
+    already established.
+
+    Does not itself call ``interrupt()``: LangGraph re-executes a node's entire
+    function body (including any LLM calls) from the top every time that node
+    resumes from an interrupt, so the interrupt for an absolute-threshold
+    clarification lives in the separate, minimal ``confirm_absolute_threshold``
+    node below instead.
+    """
+    question = state.get("next_command") or state.get("question", "")
+    use_tool_calling = bool(state.get("use_tool_calling", False))
+    filter_kwargs = _filter_kwargs(state)
+
     mode = "baseline"
     limit = DEFAULT_LIMIT_VALUE
     direction = "below"
@@ -99,48 +237,35 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         f"No limit named, so each machine is compared against its own median "
         f"({DEFAULT_BASELINE_DEVIATION_PCT}% increase counts as abnormal)."
     )
-    lookback_days = 14
-    machine_id = None
-    lot_id = None
-    product_id = None
-    layer_id = None
-    exposure_equipment_id = None
 
     threshold_context: dict[str, Any] = {}
     threshold_recommendation: dict[str, Any] = {}
     suggested_limit_value: float | None = None
     suggested_limit_rationale: str | None = None
-    # Empirical context for a *default* (unfiltered, 14-day) lookback, computed up front
-    # with no LLM call so the single model call below can recommend a cutoff in the same
-    # response instead of needing a second round-trip once filters are known.
-    default_threshold_context = services.get_kpi_threshold_context(days=14)
+    # Computed up front, from the filters already established in step 1, with no LLM
+    # call, so the single model call below can recommend a cutoff in the same response.
+    threshold_context = services.get_kpi_threshold_context(**filter_kwargs)
     try:
-        with session_manager.timed_event("model_call", {"purpose": "scope_interpretation"}):
-            scope = agent_parse_scope(question, default_threshold_context)
+        with session_manager.timed_event("model_call", {"purpose": "outlier_interpretation"}):
+            scope = agent_parse_scope(question, threshold_context, use_tool_calling=use_tool_calling)
         mode = scope.mode
         limit = float(scope.limit_value)
         direction = scope.direction
         threshold_unit = scope.threshold_unit
         deviation = float(scope.baseline_deviation_pct or DEFAULT_BASELINE_DEVIATION_PCT)
         interpretation = scope.interpretation
-        lookback_days = scope.lookback_days
-        machine_id = scope.machine_id
-        lot_id = scope.lot_id
-        product_id = scope.product_id
-        layer_id = scope.layer_id
-        exposure_equipment_id = scope.exposure_equipment_id
         suggested_limit_value = scope.suggested_limit_value
         suggested_limit_rationale = scope.suggested_limit_rationale
         session_manager.record_event(
             "model_interpretation",
-            {"request": question, "interpretation": scope.model_dump()},
+            {"request": question, "interpretation": scope.model_dump(), "use_tool_calling": use_tool_calling},
             source="application",
         )
     except Exception:
-        log.warning("Could not parse scope from %r; using default", question, exc_info=True)
+        log.warning("Could not parse outlier command from %r; using default", question, exc_info=True)
         session_manager.record_event(
             "model_interpretation",
-            {"request": question, "interpretation": "fallback_defaults", "fallback": True},
+            {"request": question, "interpretation": "fallback_defaults", "fallback": True, "use_tool_calling": use_tool_calling},
             source="application",
         )
 
@@ -156,17 +281,7 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         limit = float(threshold_match.group(2))
         threshold_unit = "percent" if threshold_match.group(3) or "%" in question else "absolute"
 
-    lookback_days = min(max(int(lookback_days), 1), 90)
-
     if not threshold_match:
-        threshold_context = services.get_kpi_threshold_context(
-            days=lookback_days,
-            machine_id=machine_id,
-            lot_id=lot_id,
-            product_id=product_id,
-            layer_id=layer_id,
-            exposure_equipment_id=exposure_equipment_id,
-        )
         if suggested_limit_value is not None:
             suggested_limit = float(suggested_limit_value)
             threshold_recommendation = {
@@ -191,12 +306,6 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
             "threshold_unit": threshold_unit,
             "baseline_deviation_pct": deviation,
             "interpretation": interpretation,
-            "lookback_days": lookback_days,
-            "machine_id": machine_id,
-            "lot_id": lot_id,
-            "product_id": product_id,
-            "layer_id": layer_id,
-            "exposure_equipment_id": exposure_equipment_id,
             "threshold_context": threshold_context,
             "threshold_recommendation": threshold_recommendation,
             "needs_threshold_clarification": True,
@@ -216,12 +325,6 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         "threshold_unit": threshold_unit,
         "baseline_deviation_pct": deviation,
         "interpretation": interpretation,
-        "lookback_days": lookback_days,
-        "machine_id": machine_id,
-        "lot_id": lot_id,
-        "product_id": product_id,
-        "layer_id": layer_id,
-        "exposure_equipment_id": exposure_equipment_id,
         "threshold_context": threshold_context,
         "threshold_recommendation": threshold_recommendation,
         "needs_threshold_clarification": False,
@@ -233,8 +336,8 @@ def confirm_absolute_threshold(state: InvestigationState) -> InvestigationState:
 
     Kept minimal - the interrupt is the first real statement - because LangGraph
     re-executes a node's whole function body from the top on every resume from an
-    interrupt; if the LLM call from ``parse_scope`` lived here too, accepting the
-    threshold would re-run that model call (and its latency) again.
+    interrupt; if the LLM call from ``parse_outlier_command`` lived here too,
+    accepting the threshold would re-run that model call (and its latency) again.
     """
     threshold_context = state.get("threshold_context") or {}
     threshold_recommendation = state.get("threshold_recommendation") or {}
@@ -270,27 +373,18 @@ def confirm_absolute_threshold(state: InvestigationState) -> InvestigationState:
 
 
 def analyze_trends(state: InvestigationState) -> InvestigationState:
+    filter_kwargs = _filter_kwargs(state)
     analysis = services.analyse_series(
         mode=state.get("mode", "baseline"),
         limit_value=state.get("limit_value", DEFAULT_LIMIT_VALUE),
         direction=state.get("direction", "below"),
         limit_unit=state.get("threshold_unit", "percent"),
         baseline_deviation_pct=state.get("baseline_deviation_pct", DEFAULT_BASELINE_DEVIATION_PCT),
-        days=state.get("lookback_days", 14),
-        machine_id=state.get("machine_id"),
-        lot_id=state.get("lot_id"),
-        product_id=state.get("product_id"),
-        layer_id=state.get("layer_id"),
-        exposure_equipment_id=state.get("exposure_equipment_id"),
+        **filter_kwargs,
     )
-    trend_series = services.get_trend_series(
-        days=state.get("lookback_days", 14),
-        machine_id=state.get("machine_id"),
-        lot_id=state.get("lot_id"),
-        product_id=state.get("product_id"),
-        layer_id=state.get("layer_id"),
-        exposure_equipment_id=state.get("exposure_equipment_id"),
-    )
+    # Already fetched once in step 1 (parse_trend_request); reuse it instead of a
+    # second identical MCP round trip.
+    trend_series = state.get("trend_series") or services.get_trend_series(**filter_kwargs)
     outliers = sorted(
         (a for a in analysis if a["outlier_dates"]),
         key=lambda a: a["deviation_pct"],
@@ -302,12 +396,14 @@ def analyze_trends(state: InvestigationState) -> InvestigationState:
     # Fetch the point-level StarRocks preview as soon as trend outliers are known,
     # so the first response can render the wafer map before approval continues.
     wafer_table = services.get_dataset_metadata()["wafer_table"]
+    exposure_equipment_ids = state.get("exposure_equipment_ids") or []
     wafer_filters = {
-        "machine": state.get("machine_id") or state.get("exposure_equipment_id") or outliers[0]["machine"],
-        "layer_id": state.get("layer_id"),
+        "machine": exposure_equipment_ids[0] if exposure_equipment_ids else outliers[0]["machine"],
+        "layer_id": (state.get("layer_ids") or [None])[0],
     }
-    if state.get("lot_id"):
-        wafer_filters["lot_id"] = state["lot_id"]
+    lot_ids = state.get("lot_ids") or []
+    if lot_ids:
+        wafer_filters["lot_ids"] = lot_ids
     elif outliers[0].get("outlier_lot_ids"):
         wafer_filters["lot_ids"] = outliers[0]["outlier_lot_ids"]
     wafer_data = services.query_wafer_data("TREND_PREVIEW", wafer_table, wafer_filters)
@@ -315,6 +411,7 @@ def analyze_trends(state: InvestigationState) -> InvestigationState:
 
 
 def confirm_investigation(state: InvestigationState) -> InvestigationState:
+    """Step 3: ask the analyst to approve/pick one of the flagged outliers."""
     candidate = state["outliers"][0]
     decision = interrupt(
         {
@@ -353,22 +450,10 @@ def apply_filters(state: InvestigationState) -> InvestigationState:
     return {"filters": filters}
 
 
-def approve_registration(state: InvestigationState) -> InvestigationState:
-    decision = interrupt(
-        {
-            "type": "approve_registration",
-            "question": "Approve dataset registration? This provisions compute upstream.",
-            "workspace_id": state["workspace_id"],
-            "dataset": "overlay_wafer_points",
-            "filters": state["filters"],
-        }
-    )
-    if not _is_approved(decision):
-        return {"cancelled_at": "approve_registration"}
-    return {}
-
-
 def register_and_wait(state: InvestigationState) -> InvestigationState:
+    """Workspace creation and dataset registration run automatically - this is
+    internal system plumbing, not an analyst decision, so there is no approval gate
+    here. A registration failure/timeout still surfaces as a real error."""
     workspace_id = state["workspace_id"]
     history: list[dict] = []
 
@@ -453,6 +538,47 @@ def _halted(state: InvestigationState) -> bool:
     return bool(state.get("cancelled_at"))
 
 
+_SPATIAL_ACTION_KEYWORDS = ("spatial", "overlay map", "overlay vector", "edge", "x/y", "radial")
+
+
+def _is_spatial_action(action: str) -> bool:
+    lowered = action.lower()
+    return any(keyword in lowered for keyword in _SPATIAL_ACTION_KEYWORDS)
+
+
+def offer_next_actions(state: InvestigationState) -> InvestigationState:
+    """Step 4: let the analyst pick one of the model's own recommended next actions.
+
+    Only ``analyze_wafer_spatial_pattern`` below is actually automated today; picking
+    any other action just ends the investigation with that choice on record - it does
+    not fabricate a capability that does not exist.
+    """
+    actions = list((state.get("findings") or {}).get("recommended_next_actions") or [])
+    options = actions + ["End investigation"]
+    decision = interrupt(
+        {
+            "type": "select_next_action",
+            "question": "Which follow-up action would you like to take?",
+            "options": options,
+        }
+    )
+    selected = decision.get("action") if isinstance(decision, dict) else decision
+    if not selected or selected not in actions:
+        return {"selected_action": None}
+    return {"selected_action": selected}
+
+
+def analyze_wafer_spatial_pattern(state: InvestigationState) -> InvestigationState:
+    """Deterministic edge-vs-center classification of the anomalous wafers already
+    fetched - no new model call, since this is a real coordinate computation."""
+    wafer_data = state.get("wafer_data") or {}
+    pattern = services.classify_wafer_spatial_pattern(
+        wafer_data.get("rows", []), wafer_data.get("anomalous_wafers", [])
+    )
+    session_manager.record_event("spatial_pattern_analysis", pattern, source="application")
+    return {"spatial_pattern": pattern}
+
+
 def build_graph():
     """Compile the investigation graph with a PostgreSQL-backed checkpointer.
 
@@ -462,20 +588,35 @@ def build_graph():
     """
     builder = StateGraph(InvestigationState)
 
-    builder.add_node("parse_scope", parse_scope)
+    builder.add_node("parse_trend_request", parse_trend_request)
+    builder.add_node("await_next_command", await_next_command)
+    builder.add_node("parse_outlier_command", parse_outlier_command)
     builder.add_node("confirm_absolute_threshold", confirm_absolute_threshold)
     builder.add_node("analyze_trends", analyze_trends)
     builder.add_node("confirm_investigation", confirm_investigation)
     builder.add_node("create_workspace", create_workspace)
     builder.add_node("apply_filters", apply_filters)
-    builder.add_node("approve_registration", approve_registration)
     builder.add_node("register_and_wait", register_and_wait)
     builder.add_node("query_wafers", query_wafers)
     builder.add_node("summarise", summarise)
+    builder.add_node("offer_next_actions", offer_next_actions)
+    builder.add_node("analyze_wafer_spatial_pattern", analyze_wafer_spatial_pattern)
 
-    builder.add_edge(START, "parse_scope")
+    builder.add_edge(START, "parse_trend_request")
     builder.add_conditional_edges(
-        "parse_scope",
+        "parse_trend_request",
+        # If the very same message already asked about outliers, skip waiting for a
+        # separate follow-up message - handles both the 2-message and 1-message flows.
+        lambda s: "parse_outlier_command" if _mentions_outliers(s.get("question", "")) else "await_next_command",
+        {"parse_outlier_command": "parse_outlier_command", "await_next_command": "await_next_command"},
+    )
+    builder.add_conditional_edges(
+        "await_next_command",
+        lambda s: "parse_outlier_command" if _mentions_outliers(s.get("next_command") or "") else "parse_trend_request",
+        {"parse_outlier_command": "parse_outlier_command", "parse_trend_request": "parse_trend_request"},
+    )
+    builder.add_conditional_edges(
+        "parse_outlier_command",
         lambda s: "confirm_absolute_threshold" if s.get("needs_threshold_clarification") else "analyze_trends",
         {"confirm_absolute_threshold": "confirm_absolute_threshold", "analyze_trends": "analyze_trends"},
     )
@@ -495,14 +636,16 @@ def build_graph():
         {END: END, "create_workspace": "create_workspace"},
     )
     builder.add_edge("create_workspace", "apply_filters")
-    builder.add_edge("apply_filters", "approve_registration")
-    builder.add_conditional_edges(
-        "approve_registration",
-        lambda s: END if _halted(s) else "register_and_wait",
-        {END: END, "register_and_wait": "register_and_wait"},
-    )
+    builder.add_edge("apply_filters", "register_and_wait")
     builder.add_edge("register_and_wait", "query_wafers")
     builder.add_edge("query_wafers", "summarise")
-    builder.add_edge("summarise", END)
+    builder.add_edge("summarise", "offer_next_actions")
+    builder.add_conditional_edges(
+        "offer_next_actions",
+        lambda s: "analyze_wafer_spatial_pattern" if s.get("selected_action") and _is_spatial_action(s["selected_action"]) else END,
+        {END: END, "analyze_wafer_spatial_pattern": "analyze_wafer_spatial_pattern"},
+    )
+    builder.add_edge("analyze_wafer_spatial_pattern", END)
 
     return builder.compile(checkpointer=build_checkpointer())
+

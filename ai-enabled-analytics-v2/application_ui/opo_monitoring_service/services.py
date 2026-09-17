@@ -1,28 +1,20 @@
 """OPO-specific domain logic: KPI trend synthesis, outlier detection, wafer scoring.
 
-Ported from the original demonstrator's ``services.py``. Per PLAN.md Phase 3, this
-module is now split cleanly: all raw data access is delegated to
-``mcp_capability_adaptor.client`` (governed MCP tool calls); this module owns only
-the business interpretation of that data, which is application-specific and not a
-platform concern.
+Ported from the original demonstrator's ``services.py``. Per PLAN.md Phase 3 and the
+target architecture's BFF boundary: functions reachable from ``agent_runtime/graph.py``
+(the agent runtime) go through ``mcp_capability_adaptor.client`` - the only path from
+the agent runtime to Foundation APIs. Functions that only back the plain (non-agent)
+display route call ``foundation.clients`` directly, since the BFF may talk to
+Foundation APIs itself for plain display with no agent or MCP involvement. Either way,
+this module owns only the business interpretation of that data.
 """
 
 from datetime import date, datetime, timedelta
 from statistics import median
 from typing import Any
 
+from foundation.clients import lanadb_query as _foundation_lanadb
 from mcp_capability_adaptor import client as mcp_client
-
-
-def _percentile(values: list[float], percentile: float) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    position = (len(ordered) - 1) * percentile
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    fraction = position - lower
-    return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 3)
 
 
 def get_dataset_metadata() -> dict[str, Any]:
@@ -59,34 +51,52 @@ def _coerce_point_timestamp(value: Any) -> datetime | None:
         return None
 
 
-def get_trend_series(
-    days: int = 14,
-    machine_id: str | None = None,
-    lot_id: str | None = None,
-    product_id: str | None = None,
-    layer_id: str | None = None,
-    exposure_equipment_id: str | None = None,
+def _build_trend_series(
+    rows: list[dict[str, Any]],
+    days: int | None,
+    start_date: str | None,
+    end_date: str | None,
+    lot_ids: list[str] | None,
+    product_ids: list[str] | None,
+    layer_ids: list[str] | None,
+    exposure_equipment_ids: list[str] | None,
 ) -> list[dict[str, Any]]:
-    """Real historical KPI points per machine/product. Carries no judgement about outliers."""
-    cutoff = date.today() - timedelta(days=days - 1)
+    """Group/filter raw trend rows into per-machine/product point series. No outlier judgement.
+
+    Either an explicit ``start_date``/``end_date`` range or a relative ``days``
+    lookback applies - never both; the explicit range wins when given.
+    """
+    if start_date or end_date:
+        range_start = date.fromisoformat(start_date) if start_date else date.min
+        range_end = date.fromisoformat(end_date) if end_date else date.max
+    else:
+        range_start = date.today() - timedelta(days=(days or 14) - 1)
+        range_end = date.max
+
+    lot_id_set = {lot.lower() for lot in lot_ids} if lot_ids else None
+    product_id_set = {p.lower() for p in product_ids} if product_ids else None
+    layer_id_set = {layer.lower() for layer in layer_ids} if layer_ids else None
+    exposure_equipment_id_set = {e.lower() for e in exposure_equipment_ids} if exposure_equipment_ids else None
+
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
 
-    for item in mcp_client.read_trends():
+    for item in rows:
         machine, product = _coerce_series_identity(item)
-        if machine_id and machine.lower() != machine_id.lower():
+        if exposure_equipment_id_set and machine.lower() not in exposure_equipment_id_set:
             continue
-        if lot_id and str(item.get("lotId", item.get("lot_id", ""))).lower() != lot_id.lower():
+        if lot_id_set and str(item.get("lotId", item.get("lot_id", ""))).lower() not in lot_id_set:
             continue
-        if product_id and product.lower() != product_id.lower():
+        if product_id_set and product.lower() not in product_id_set:
             continue
-        if layer_id and str(item.get("layerId", item.get("layer_id", ""))).lower() != layer_id.lower():
-            continue
-        if exposure_equipment_id and str(item.get("exposureEquipmentId", "")).lower() != exposure_equipment_id.lower():
+        if layer_id_set and str(item.get("layerId", item.get("layer_id", ""))).lower() not in layer_id_set:
             continue
 
         point_timestamp = _coerce_point_timestamp(item.get("lotStart", item.get("lot_start")))
         kpi_value = item.get("kpiValue1", item.get("kpi_value"))
-        if point_timestamp is None or point_timestamp.date() < cutoff or kpi_value is None:
+        if point_timestamp is None or kpi_value is None:
+            continue
+        point_date = point_timestamp.date()
+        if point_date < range_start or point_date > range_end:
             continue
 
         key = (machine, product)
@@ -113,33 +123,63 @@ def get_trend_series(
     return series
 
 
-def get_kpi_threshold_context(
-    days: int = 14,
-    machine_id: str | None = None,
-    lot_id: str | None = None,
-    product_id: str | None = None,
-    layer_id: str | None = None,
-    exposure_equipment_id: str | None = None,
-) -> dict[str, Any]:
-    """Calculate empirical absolute KPI cutoffs for model-supported suggestions."""
-    series = get_trend_series(
-        days=days,
-        machine_id=machine_id,
-        lot_id=lot_id,
-        product_id=product_id,
-        layer_id=layer_id,
-        exposure_equipment_id=exposure_equipment_id,
+def get_trend_series(
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Trend series for the agent-runtime path: reads via MCP (the only path allowed
+    from ``agent_runtime``/``graph.py`` to Foundation APIs)."""
+    return _build_trend_series(
+        mcp_client.read_trends(), days, start_date, end_date, lot_ids, product_ids, layer_ids, exposure_equipment_ids
     )
-    values = [point["kpi_value"] for item in series for point in item["points"]]
-    return {
-        "metric": "OPO KPI",
-        "unit": "absolute",
-        "sample_count": len(values),
-        "observed_min": round(min(values), 3) if values else None,
-        "observed_max": round(max(values), 3) if values else None,
-        "p95": _percentile(values, 0.95),
-        "p99": _percentile(values, 0.99),
-    }
+
+
+def get_display_trend_series(
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Trend series for the plain (non-agent) BFF display route. Per the target
+    architecture, the app UI/BFF may call the Foundation trend API directly - no
+    agent or MCP involvement - for plain display (e.g. ``GET /trends``)."""
+    return _build_trend_series(
+        _foundation_lanadb.query_trend_rows(),
+        days, start_date, end_date, lot_ids, product_ids, layer_ids, exposure_equipment_ids,
+    )
+
+
+def get_kpi_threshold_context(
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Empirical absolute KPI cutoffs (p95/p99/bell-curve spread) for model-supported
+    suggestions. Computed by the MCP capability adaptor directly against the trend
+    table, so only this small summary - not the full row set - crosses into the
+    application layer.
+    """
+    return mcp_client.get_kpi_distribution_stats(
+        days=days,
+        start_date=start_date,
+        end_date=end_date,
+        lot_ids=lot_ids,
+        product_ids=product_ids,
+        layer_ids=layer_ids,
+        exposure_equipment_ids=exposure_equipment_ids,
+    )
 
 
 def analyse_series(
@@ -148,12 +188,13 @@ def analyse_series(
     direction: str = "below",
     baseline_deviation_pct: float = 3.0,
     limit_unit: str = "percent",
-    days: int = 14,
-    machine_id: str | None = None,
-    lot_id: str | None = None,
-    product_id: str | None = None,
-    layer_id: str | None = None,
-    exposure_equipment_id: str | None = None,
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Per-series summary under one of two rules.
 
@@ -168,11 +209,12 @@ def analyse_series(
 
     for s in get_trend_series(
         days=days,
-        machine_id=machine_id,
-        lot_id=lot_id,
-        product_id=product_id,
-        layer_id=layer_id,
-        exposure_equipment_id=exposure_equipment_id,
+        start_date=start_date,
+        end_date=end_date,
+        lot_ids=lot_ids,
+        product_ids=product_ids,
+        layer_ids=layer_ids,
+        exposure_equipment_ids=exposure_equipment_ids,
     ):
         baseline = median(p["kpi_value"] for p in s["points"])
 
@@ -344,3 +386,70 @@ def query_wafer_data(
         "rows": rows,
         "anomalous_wafers": anomalous,
     }
+
+
+def _wafer_point_radius(row: dict[str, Any]) -> float:
+    """Distance from wafer center, in the same field-center + intrafield-position
+    coordinate system the UI's wafer map uses (see PLAN.md wafer-coordinate note)."""
+    x = (
+        row.get("exposureprocessjob_waferexposureprocessjob_exposurelogicalwafer_exposedfield_field_center_x", 0.0)
+        or 0.0
+    ) + (
+        row.get("measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_x", row.get("position_x", 0.0))
+        or 0.0
+    )
+    y = (
+        row.get("exposureprocessjob_waferexposureprocessjob_exposurelogicalwafer_exposedfield_field_center_y", 0.0)
+        or 0.0
+    ) + (
+        row.get("measureprocessjob_wafermeasureprocessjob_measurement_intrafieldposition_position_y", row.get("position_y", 0.0))
+        or 0.0
+    )
+    return ((float(x) ** 2) + (float(y) ** 2)) ** 0.5
+
+
+def classify_wafer_spatial_pattern(rows: list[dict[str, Any]], anomalous_wafer_ids: list[str]) -> dict[str, Any]:
+    """Edge-vs-center classification of the anomalous wafers' point positions.
+
+    A point at or beyond 70% of the widest observed radius (across every point in
+    this query, not just the anomalous ones) counts as 'edge' - a common metrology
+    convention for wafer-edge effects. Deterministic and code-only, matching the
+    rest of this module: no model call is involved in classifying real coordinates.
+    """
+    all_radii = [_wafer_point_radius(r) for r in rows]
+    wafer_radius = max(all_radii) if all_radii else 0.0
+    edge_threshold = wafer_radius * 0.7
+
+    anomalous_ids = set(anomalous_wafer_ids)
+    anomalous_radii = [_wafer_point_radius(r) for r in rows if r.get("wafer_id") in anomalous_ids]
+
+    if not anomalous_radii:
+        return {
+            "anomalous_point_count": 0,
+            "edge_count": 0,
+            "center_count": 0,
+            "edge_fraction": None,
+            "wafer_radius_estimate_um": round(wafer_radius, 3),
+            "edge_threshold_um": round(edge_threshold, 3),
+            "pattern": "no_data",
+        }
+
+    edge_count = sum(1 for r in anomalous_radii if r >= edge_threshold)
+    center_count = len(anomalous_radii) - edge_count
+    if edge_count > center_count:
+        pattern = "edge-concentrated"
+    elif center_count > edge_count:
+        pattern = "center-concentrated"
+    else:
+        pattern = "mixed"
+
+    return {
+        "anomalous_point_count": len(anomalous_radii),
+        "edge_count": edge_count,
+        "center_count": center_count,
+        "edge_fraction": round(edge_count / len(anomalous_radii), 3),
+        "wafer_radius_estimate_um": round(wafer_radius, 3),
+        "edge_threshold_um": round(edge_threshold, 3),
+        "pattern": pattern,
+    }
+

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://asml.com/contracts/model/DetectionScope.schema.json",
-  "description": "How the analyst asked for outliers to be identified.",
+  "description": "How the analyst asked for outliers to be identified, within the trend filters\nalready established by ``TrendFilters``.",
   "properties": {
     "mode": {
       "description": "Use 'absolute' when the analyst names a KPI threshold, e.g. 'outliers below 3.0' or 'anything above 3.2'. Use 'baseline' when they ask for outliers without naming a number, meaning each machine should be compared against its own normal level.",
@@ -52,77 +52,6 @@
       "title": "Interpretation",
       "type": "string"
     },
-    "lookback_days": {
-      "default": 14,
-      "description": "Number of most recent days to include, default 14.",
-      "title": "Lookback Days",
-      "type": "integer"
-    },
-    "machine_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Machine or exposure equipment ID filter, if named.",
-      "title": "Machine Id"
-    },
-    "lot_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Lot ID filter, if named.",
-      "title": "Lot Id"
-    },
-    "product_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Product ID filter, if named.",
-      "title": "Product Id"
-    },
-    "layer_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Layer ID filter, if named.",
-      "title": "Layer Id"
-    },
-    "exposure_equipment_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Exposure equipment ID filter, if named.",
-      "title": "Exposure Equipment Id"
-    },
     "suggested_limit_value": {
       "anyOf": [
         {
@@ -133,7 +62,7 @@
         }
       ],
       "default": null,
-      "description": "Only when the analyst did not name an explicit numeric threshold: an absolute OPO KPI outlier cutoff recommended from the supplied empirical P95/P99 context. Prefer P95 for a broader screening threshold or P99 for severe anomalies. Null when the analyst already named a number.",
+      "description": "Only when the analyst did not name an explicit numeric threshold: an absolute OPO KPI outlier cutoff recommended from the supplied empirical context (p95, p99, mean, stdev, bell_curve_range). Prefer p95 for a broader screening threshold, p99 for severe anomalies, or the bell_curve_range upper bound when the distribution's spread is wide. Null when the analyst already named a number.",
       "title": "Suggested Limit Value"
     },
     "suggested_limit_rationale": {
@@ -146,7 +75,7 @@
         }
       ],
       "default": null,
-      "description": "One short explanation for suggested_limit_value, grounded only in the supplied P95/P99 values. Null when suggested_limit_value is null.",
+      "description": "One short explanation for suggested_limit_value, grounded only in the supplied p95/p99/mean/stdev/bell_curve_range values. Null when suggested_limit_value is null.",
       "title": "Suggested Limit Rationale"
     }
   },

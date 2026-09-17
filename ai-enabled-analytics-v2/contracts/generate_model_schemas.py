@@ -13,11 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agent_runtime.application_agent.contracts import DetectionScope, FindingsSummary
+from agent_runtime.application_agent.contracts import DetectionScope, FindingsSummary, TrendFilters
 
 OUTPUT_DIR = Path(__file__).parent / "model"
 
-MODELS = {"DetectionScope": DetectionScope, "FindingsSummary": FindingsSummary}
+MODELS = {"TrendFilters": TrendFilters, "DetectionScope": DetectionScope, "FindingsSummary": FindingsSummary}
 
 
 def main() -> None:

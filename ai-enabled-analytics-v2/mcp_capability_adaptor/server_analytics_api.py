@@ -138,5 +138,29 @@ def read_trends(table: str | None = None, connection_info: dict[str, Any] | None
     return lanadb_query.query_trend_rows(table=table, connection_info=connection_info)
 
 
+@mcp.tool()
+def get_kpi_distribution_stats(
+    days: int | None = 14,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lot_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
+    layer_ids: list[str] | None = None,
+    exposure_equipment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Sample count, min/max, mean, stdev, p95/p99 and a bell-curve spread band for the
+    (optionally filtered) trend table, computed here so only the summary - not the raw
+    rows - crosses this tool boundary."""
+    return lanadb_query.compute_kpi_distribution_stats(
+        days=days,
+        start_date=start_date,
+        end_date=end_date,
+        lot_ids=lot_ids,
+        product_ids=product_ids,
+        layer_ids=layer_ids,
+        exposure_equipment_ids=exposure_equipment_ids,
+    )
+
+
 if __name__ == "__main__":
     mcp.run()

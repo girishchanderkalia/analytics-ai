@@ -23,6 +23,11 @@ class FoundationSettings(BaseSettings):
     key_vault_url: str = "https://ssa-prd-proj-15528-01-kv.vault.azure.net/"
     secret_name: str = "ssa-ai-key"
 
+    # Direct override for environments with no reachable managed/workload identity
+    # (e.g. this on-prem cluster's IMDS probe always times out): when set, get_api_key()
+    # returns this value and skips DefaultAzureCredential/Key Vault entirely.
+    api_key: str | None = None
+
     # Single PostgreSQL runtime-state store: LangGraph checkpoints live in tables
     # created by PostgresSaver.setup(); session/audit/memory tables are created by
     # db/schema.sql. Same database, separate table groups (see PLAN.md Phase 2).
@@ -59,6 +64,8 @@ def get_api_key() -> str:
     request triggered it instead of failing fast into the caller's fallback path.
     """
     settings = get_settings()
+    if settings.api_key:
+        return settings.api_key
     client = SecretClient(
         vault_url=settings.key_vault_url,
         # Picks up the local `az login` session, or a managed identity when deployed

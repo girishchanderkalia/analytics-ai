@@ -53,7 +53,7 @@ def _warm_caches() -> None:
     """
     threading.Thread(target=_warm_model_client, name="warm-model-client", daemon=True).start()
     try:
-        services.get_trend_series()
+        services.get_display_trend_series()
     except Exception:
         log.warning("Could not pre-warm mock datasets", exc_info=True)
 
@@ -88,6 +88,7 @@ def _plotly_bundle() -> str:
 class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
+    use_tool_calling: bool = False
 
 
 class ResumeRequest(BaseModel):
@@ -108,11 +109,12 @@ def _evidence(result: dict) -> dict:
         "threshold_recommendation": result.get("threshold_recommendation"),
         "interpretation": result.get("interpretation"),
         "lookback_days": result.get("lookback_days"),
-        "machine_id": result.get("machine_id"),
-        "lot_id": result.get("lot_id"),
-        "product_id": result.get("product_id"),
-        "layer_id": result.get("layer_id"),
-        "exposure_equipment_id": result.get("exposure_equipment_id"),
+        "start_date": result.get("start_date"),
+        "end_date": result.get("end_date"),
+        "lot_ids": result.get("lot_ids"),
+        "product_ids": result.get("product_ids"),
+        "layer_ids": result.get("layer_ids"),
+        "exposure_equipment_ids": result.get("exposure_equipment_ids"),
         "trend_series": result.get("trend_series"),
         "analysis": result.get("analysis"),
         "outliers": result.get("outliers"),
@@ -123,6 +125,8 @@ def _evidence(result: dict) -> dict:
         "registration_history": result.get("registration_history"),
         "anomalous_wafers": (result.get("wafer_data") or {}).get("anomalous_wafers"),
         "wafer_rows": (result.get("wafer_data") or {}).get("rows"),
+        "selected_action": result.get("selected_action"),
+        "spatial_pattern": result.get("spatial_pattern"),
     }
 
 
@@ -220,13 +224,13 @@ def chat(request: ChatRequest) -> dict:
     try:
         session_manager.record_event(
             "user_request",
-            {"message": request.message},
+            {"message": request.message, "use_tool_calling": request.use_tool_calling},
             session_id=thread_id,
             source="application",
         )
     finally:
         session_manager.reset_session_id(token)
-    return _invoke(thread_id, {"question": request.message})
+    return _invoke(thread_id, {"question": request.message, "use_tool_calling": request.use_tool_calling})
 
 
 @app.post("/resume")
@@ -274,10 +278,9 @@ def thread_state(thread_id: str) -> dict:
 @app.get("/trends")
 def trends() -> dict:
     """Raw KPI series for the chart. No LLM or agent involved, so the plot renders
-    on page load. Uses the MCP-backed service directly, matching the target
-    diagram's `bff ..> query_api : GET /trends, no agent or MCP` display path as
-    closely as the mocked Foundation APIs allow."""
-    return {"series": services.get_trend_series()}
+    on page load. Calls Foundation directly (no MCP), matching the target diagram's
+    `bff ..> query_api : GET /trends, no agent or MCP` display path."""
+    return {"series": services.get_display_trend_series()}
 
 
 class AddFiltersRequest(BaseModel):
