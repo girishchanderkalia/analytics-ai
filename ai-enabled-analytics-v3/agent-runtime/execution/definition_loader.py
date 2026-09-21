@@ -126,7 +126,10 @@ class AgentDefinitionBundle:
 class AgentRepository:
     """Discover and load agents from an agent repository."""
 
-    def __init__(self, repository_directory: Path | str):
+    def __init__(
+        self,
+        repository_directory: Path | str,
+    ) -> None:
         self.repository_directory = Path(
             repository_directory
         ).resolve()
@@ -151,19 +154,54 @@ class AgentRepository:
 
         return sorted(result)
 
+    def contains(
+        self,
+        directory_name: str,
+    ) -> bool:
+        """Return whether an agent directory is discoverable."""
+
+        if not isinstance(directory_name, str):
+            return False
+
+        normalized_name = directory_name.strip()
+
+        if not normalized_name:
+            return False
+
+        return (
+            self.repository_directory
+            / normalized_name
+            / "definitions"
+        ).is_dir()
+
     def load(
         self,
-        agent_directory_name: str,
+        directory_name: str,
     ) -> AgentDefinitionBundle:
-        """Load an agent by repository directory name."""
+        """Load one agent by its repository directory name."""
+
+        if not isinstance(directory_name, str):
+            raise AgentDefinitionError(
+                "Agent directory name must be a string"
+            )
+
+        normalized_name = directory_name.strip()
+
+        if not normalized_name:
+            raise AgentDefinitionError(
+                "Agent directory name must not be empty"
+            )
 
         agent_directory = (
-            self.repository_directory / agent_directory_name
+            self.repository_directory
+            / normalized_name
         )
 
         return load_agent_definition(agent_directory)
 
-    def load_all(self) -> dict[str, AgentDefinitionBundle]:
+    def load_all(
+        self,
+    ) -> dict[str, AgentDefinitionBundle]:
         """Load all discoverable agents, keyed by agent ID."""
 
         bundles: dict[str, AgentDefinitionBundle] = {}

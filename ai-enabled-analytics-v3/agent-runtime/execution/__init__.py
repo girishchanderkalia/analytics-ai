@@ -1,5 +1,15 @@
 """Execution components for the shared Application Agent Runtime."""
 
+from .operation_registry import (
+    InvalidOperationError,
+    OperationAlreadyRegisteredError,
+    OperationDefinition,
+    OperationExecutionError,
+    OperationNotFoundError,
+    OperationRegistry,
+    OperationRegistryError,
+)
+
 from .contract_factory import (
     ContractFactory,
     ContractFactoryError,
@@ -36,4 +46,11 @@ __all__ = [
     "generate_schemas",
     "load_agent_definition",
     "load_contract_factory",
+    "InvalidOperationError",
+    "OperationAlreadyRegisteredError",
+    "OperationDefinition",
+    "OperationExecutionError",
+    "OperationNotFoundError",
+    "OperationRegistry",
+    "OperationRegistryError",
 ]
