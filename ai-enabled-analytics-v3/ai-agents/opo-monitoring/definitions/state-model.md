@@ -79,6 +79,13 @@ fields:
     default: null
     description: Dataset registration evidence.
 
+  registration_poll_count:
+    type: integer
+    default: 0
+    description: >
+      Number of registration-status checks performed during the current
+      workflow execution.
+
   anomalous_wafers:
     type: object_list
     default: []
