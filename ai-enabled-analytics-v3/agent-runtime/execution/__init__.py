@@ -1,5 +1,14 @@
 """Execution components for the shared Application Agent Runtime."""
 
+from .contract_factory import (
+    ContractFactory,
+    ContractFactoryError,
+    GeneratedContract,
+    build_contract_factory,
+    generate_contracts,
+    generate_schemas,
+    load_contract_factory,
+)
 from .definition_loader import (
     AgentDefinitionBundle,
     AgentDefinitionError,
@@ -15,9 +24,16 @@ __all__ = [
     "AgentDefinitionBundle",
     "AgentDefinitionError",
     "AgentRepository",
+    "ContractFactory",
+    "ContractFactoryError",
+    "GeneratedContract",
     "MarkdownDefinition",
     "REQUIRED_DEFINITIONS",
     "SUPPORTED_FIELD_TYPES",
     "SUPPORTED_NODE_TYPES",
+    "build_contract_factory",
+    "generate_contracts",
+    "generate_schemas",
     "load_agent_definition",
+    "load_contract_factory",
 ]
