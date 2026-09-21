@@ -1,58 +1,47 @@
-"""Dependency composition for the Application Agent Runtime.
-
-The host layer connects runtime infrastructure without coupling the
-definition loader to concrete execution implementations.
-"""
+"""Dependency composition for the Application Agent Runtime."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 from execution.definition_loader import AgentRepository
-from execution.operation_registry import (
-    OperationRegistry,
-    create_default_operation_registry,
-)
+from execution.workflow_engine import WorkflowEngine
+from persistence.sqlite_conversation_store import SQLiteConversationStore
+
+from .runtime_service import RuntimeService
 
 
 @dataclass(frozen=True)
-class RuntimeComposition:
-    """Dependencies required by the Application Agent Runtime."""
+class RuntimeDependencies:
+    """Externally supplied runtime dependencies."""
 
-    repository_root: Path
-    operation_registry: OperationRegistry
-    agent_repository: AgentRepository
+    execution_context: Any
 
 
-def create_runtime_composition(
+def create_runtime_service(
+    *,
     repository_root: Path | str,
-) -> RuntimeComposition:
-    """Create the default runtime dependency composition."""
+    database_path: Path | str,
+    dependencies: RuntimeDependencies,
+    maximum_steps: int = 100,
+) -> RuntimeService:
+    """Compose the Runtime Service from concrete infrastructure."""
 
     root = Path(repository_root).resolve()
+    agent_repository = AgentRepository(root / "ai-agents")
+    conversation_store = SQLiteConversationStore(database_path)
 
-    if not root.is_dir():
-        raise ValueError(
-            f"Repository root does not exist: {root}"
+    def engine_factory(bundle: Any) -> WorkflowEngine:
+        return WorkflowEngine(
+            bundle=bundle,
+            context=dependencies.execution_context,
+            maximum_steps=maximum_steps,
         )
 
-    agent_catalog_root = root / "ai-agents"
-
-    if not agent_catalog_root.is_dir():
-        raise ValueError(
-            f"Agent catalog does not exist: {agent_catalog_root}"
-        )
-
-    operation_registry = create_default_operation_registry()
-
-    agent_repository = AgentRepository(
-        agent_catalog_root,
-        operation_names=operation_registry.names(),
-    )
-
-    return RuntimeComposition(
-        repository_root=root,
-        operation_registry=operation_registry,
+    return RuntimeService(
         agent_repository=agent_repository,
+        conversation_store=conversation_store,
+        engine_factory=engine_factory,
     )
