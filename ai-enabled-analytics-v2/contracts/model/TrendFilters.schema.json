@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/TrendFilters.schema.json",
+  "properties": {
+    "lookback_days": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Relative lookback in days.",
+      "title": "Lookback Days"
+    },
+    "start_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Inclusive ISO start date.",
+      "title": "Start Date"
+    },
+    "end_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Inclusive ISO end date.",
+      "title": "End Date"
+    },
+    "lot_ids": {
+      "default": [],
+      "description": "Lot identifiers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Lot Ids",
+      "type": "array"
+    },
+    "product_ids": {
+      "default": [],
+      "description": "Product identifiers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Product Ids",
+      "type": "array"
+    },
+    "layer_ids": {
+      "default": [],
+      "description": "Layer identifiers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Layer Ids",
+      "type": "array"
+    },
+    "exposure_equipment_ids": {
+      "default": [],
+      "description": "Exposure equipment identifiers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Exposure Equipment Ids",
+      "type": "array"
+    },
+    "interpretation": {
+      "default": "",
+      "description": "Short filter interpretation.",
+      "title": "Interpretation",
+      "type": "string"
+    }
+  },
+  "title": "TrendFilters",
+  "type": "object"
+}

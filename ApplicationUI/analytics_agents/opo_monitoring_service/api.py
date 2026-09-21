@@ -1,6 +1,7 @@
 import uuid
 import time
 import logging
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -32,15 +33,19 @@ def _warm_caches() -> None:
     """Pay the one-time model-credential fetch and mock dataset load costs now,
     not on the first user request (Key Vault auth alone can take several seconds,
     and unpacking the wafer dataset the first time takes a couple more)."""
-    try:
-        get_llm()
-    except Exception:
-        log.warning("Could not pre-warm the model client", exc_info=True)
+    threading.Thread(target=_warm_model_client, name="model-warmup", daemon=True).start()
     try:
         lanadb_query.query_trend_rows()
         datawarehouse.query_wafer_rows()
     except Exception:
         log.warning("Could not pre-warm mock datasets", exc_info=True)
+
+
+def _warm_model_client() -> None:
+    try:
+        get_llm()
+    except Exception:
+        log.warning("Could not pre-warm the model client", exc_info=True)
 
 
 @app.middleware("http")
@@ -66,6 +71,7 @@ def _plotly_bundle() -> str:
 class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
+    use_tool_calling: bool = False
 
 
 class ResumeRequest(BaseModel):
@@ -198,13 +204,16 @@ def chat(request: ChatRequest) -> dict:
     try:
         session_memory.record_event(
             "user_request",
-            {"message": request.message},
+            {"message": request.message, "use_tool_calling": request.use_tool_calling},
             session_id=thread_id,
             source="application",
         )
     finally:
         session_memory.reset_session_id(token)
-    return _invoke(thread_id, {"question": request.message})
+    return _invoke(
+        thread_id,
+        {"question": request.message, "use_tool_calling": request.use_tool_calling},
+    )
 
 
 @app.post("/resume")

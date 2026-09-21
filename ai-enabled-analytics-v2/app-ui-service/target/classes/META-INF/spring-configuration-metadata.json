@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "name": "workflow-runtime",
+      "type": "com.asml.analytics.facade.config.WorkflowRuntimeProperties",
+      "sourceType": "com.asml.analytics.facade.config.WorkflowRuntimeProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "workflow-runtime.base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.asml.analytics.facade.config.WorkflowRuntimeProperties"
+    }
+  ],
+  "hints": []
+}

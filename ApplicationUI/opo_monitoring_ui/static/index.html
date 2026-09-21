@@ -70,6 +70,10 @@
         <div id="interaction-panel" class="interaction-panel" hidden></div>
         <input id="message-input" type="text" value="Show me trends and outliers"
           placeholder="e.g. outliers above 3 for NXE3600 in the last 7 days" autocomplete="off" />
+        <label class="tool-calling-control" title="Allow model-derived scope to select governed analytics capability calls">
+          <input id="tool-calling-toggle" type="checkbox" />
+          <span>Model capability mode</span>
+        </label>
         <button id="send-btn" type="submit">Start</button>
       </form>
     </aside>

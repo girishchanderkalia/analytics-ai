@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/FindingsSummary.schema.json",
+  "properties": {
+    "finding": {
+      "default": "",
+      "description": "Evidence-based finding.",
+      "title": "Finding",
+      "type": "string"
+    },
+    "evidence_references": {
+      "default": [],
+      "description": "Evidence labels.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence References",
+      "type": "array"
+    },
+    "confidence": {
+      "default": "low",
+      "description": "Finding confidence.",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Confidence",
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "description": "Important limitations.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "recommended_next_actions": {
+      "default": [],
+      "description": "Evidence-grounded next actions.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Recommended Next Actions",
+      "type": "array"
+    },
+    "alternative_explanations": {
+      "default": [],
+      "description": "Explanations not ruled out.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Alternative Explanations",
+      "type": "array"
+    }
+  },
+  "title": "FindingsSummary",
+  "type": "object"
+}

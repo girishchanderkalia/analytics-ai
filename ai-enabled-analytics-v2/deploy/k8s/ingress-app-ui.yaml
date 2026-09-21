@@ -1,0 +1,45 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: vcp-ingress-ai-agents-app-ui
+  namespace: ai-agents
+spec:
+  gateways:
+    - istio-system/ingress-prod
+  hosts:
+    - "*"
+  http:
+    - match:
+        - uri:
+            regex: /ai-ui(/|$)(.*)
+      rewrite:
+        uriRegexRewrite:
+          match: ^/ai-ui(?:/|$)(.*)$
+          rewrite: /\1
+      route:
+        - destination:
+            host: analytics-workflow-runtime.ai-agents.svc.cluster.local
+            port:
+              number: 8000
+    - match:
+        - uri:
+            prefix: /static/
+        - uri:
+            prefix: /vendor/
+        - uri:
+            exact: /trends
+        - uri:
+            exact: /chat
+        - uri:
+            exact: /resume
+        - uri:
+            exact: /capabilities
+        - uri:
+            prefix: /threads/
+        - uri:
+            prefix: /sessions/
+      route:
+        - destination:
+            host: analytics-workflow-runtime.ai-agents.svc.cluster.local
+            port:
+              number: 8000

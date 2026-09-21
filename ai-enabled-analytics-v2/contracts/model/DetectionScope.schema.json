@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asml.com/contracts/model/DetectionScope.schema.json",
+  "properties": {
+    "mode": {
+      "default": "baseline",
+      "description": "Outlier detection mode.",
+      "enum": [
+        "absolute",
+        "baseline"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "limit_value": {
+      "default": 3.0,
+      "description": "KPI threshold.",
+      "title": "Limit Value",
+      "type": "number"
+    },
+    "direction": {
+      "default": "below",
+      "description": "Comparison direction.",
+      "enum": [
+        "below",
+        "above"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "threshold_unit": {
+      "default": "percent",
+      "description": "Threshold unit.",
+      "enum": [
+        "percent",
+        "absolute"
+      ],
+      "title": "Threshold Unit",
+      "type": "string"
+    },
+    "baseline_deviation_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Baseline deviation percentage.",
+      "title": "Baseline Deviation Pct"
+    },
+    "interpretation": {
+      "default": "",
+      "description": "Short interpretation.",
+      "title": "Interpretation",
+      "type": "string"
+    },
+    "suggested_limit_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Recommended absolute cutoff.",
+      "title": "Suggested Limit Value"
+    },
+    "suggested_limit_rationale": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Recommendation rationale.",
+      "title": "Suggested Limit Rationale"
+    }
+  },
+  "title": "DetectionScope",
+  "type": "object"
+}

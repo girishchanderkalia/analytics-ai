@@ -2,6 +2,7 @@ const timeline = document.getElementById("timeline");
 const evidencePane = document.getElementById("evidence");
 const threadInput = document.getElementById("thread-input");
 const messageInput = document.getElementById("message-input");
+const toolCallingToggle = document.getElementById("tool-calling-toggle");
 const sendBtn = document.getElementById("send-btn");
 const interactionPanel = document.getElementById("interaction-panel");
 const findingsPanel = document.getElementById("findings-panel");
@@ -660,7 +661,11 @@ document.getElementById("composer").onsubmit = (event) => {
   evidencePane.innerHTML = '<div class="empty-state small"><p>No evidence yet.</p></div>';
   drawPlot(null, null);
   addNode("msg user", escapeHtml(message));
-  send("/chat", { message }, "Analysing trends…");
+  send(
+    "/chat",
+    { message, use_tool_calling: toolCallingToggle.checked },
+    "Analysing trends…"
+  );
 };
 
 toggleRightPanel.onclick = () => {
