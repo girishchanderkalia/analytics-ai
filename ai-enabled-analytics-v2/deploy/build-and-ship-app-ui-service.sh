@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-FACADE_DIR="$SCRIPT_DIR/../../app-ui-service"
+FACADE_DIR="$SCRIPT_DIR/../app-ui-service"
 
 IMAGE="${IMAGE:-iact/app-ui-service:latest}"
 REGISTRY_IMAGE="${REGISTRY_IMAGE:-repo.cluster.local:5443/ai-agents/app-ui-service:latest}"

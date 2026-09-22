@@ -72,20 +72,20 @@ class DetectionScope(BaseModel):
             "against its own normal level."
         )
     )
-    limit_value: float = Field(
+    limit_value: float | None = Field(
         description=(
             "The KPI threshold named by the analyst, used only when mode is "
             f"'absolute'. If no number was named, use {DEFAULT_LIMIT_VALUE}."
         )
     )
-    direction: Literal["below", "above"] = Field(
+    direction: Literal["below", "above"] | None = Field(
         description=(
             "Which side of the limit to mark, used only when mode is 'absolute'. "
             "'below' for under/below/less than/worse than, 'above' for over/above/"
             "more than/better than. Default 'below'."
         )
     )
-    threshold_unit: Literal["percent", "absolute"] = Field(
+    threshold_unit: Literal["percent", "absolute"] | None = Field(
         description=(
             "Unit for a numeric threshold: use 'percent' for a relative deviation, "
             "otherwise use 'absolute' for the OPO KPI value."

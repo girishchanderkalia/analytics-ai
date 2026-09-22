@@ -15,7 +15,7 @@ from pydantic_ai.providers.azure import AzureProvider
 from foundation.config import get_api_key, get_settings
 
 
-@lru_cache
+#@lru_cache
 def get_model() -> OpenAIChatModel:
     """Platform capability: connects any application agent to the hosted model.
 

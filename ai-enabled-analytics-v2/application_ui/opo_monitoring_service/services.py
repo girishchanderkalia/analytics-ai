@@ -69,8 +69,11 @@ def _build_trend_series(
     if start_date or end_date:
         range_start = date.fromisoformat(start_date) if start_date else date.min
         range_end = date.fromisoformat(end_date) if end_date else date.max
+    elif days is not None:
+        range_start = date.today() - timedelta(days=days - 1)
+        range_end = date.max
     else:
-        range_start = date.today() - timedelta(days=(days or 14) - 1)
+        range_start = date.min
         range_end = date.max
 
     lot_id_set = {lot.lower() for lot in lot_ids} if lot_ids else None
@@ -140,7 +143,7 @@ def get_trend_series(
 
 
 def get_display_trend_series(
-    days: int | None = 14,
+    days: int | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     lot_ids: list[str] | None = None,

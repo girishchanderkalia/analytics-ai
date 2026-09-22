@@ -66,7 +66,20 @@ SCOPE_TOOL_CALLING_GUARDRAILS = (
     "suggested_limit_value null and say so in suggested_limit_rationale rather than "
     "guessing a number.\n"
     "4. If the tool call fails or is unavailable, leave suggested_limit_value and "
-    "suggested_limit_rationale null instead of fabricating a value."
+    "suggested_limit_rationale null instead of fabricating a value.\n"
+    "If the analyst does not provide a threshold:\n"
+    "1. Call get_kpi_distribution_stats().\n"
+    "2. Use p95 as the default recommended threshold.\n"
+    "3. Use p99 only for severe anomaly detection.\n"
+    "4. Set:\n"
+        "suggested_limit_value\n"
+        "suggested_limit_rationale\n"
+    "5. Also set:\n"
+        "mode='absolute'\n"
+        "limit_value=<suggested_limit_value>\n"
+        "direction='above'\n"
+        "threshold_unit='absolute'\n"
+    "6. Never leave limit_value empty.\n"
 )
 
 FINDINGS_SYSTEM_PROMPT = (
@@ -138,7 +151,12 @@ def parse_scope(question: str, empirical_context: dict, use_tool_calling: bool =
     if use_tool_calling:
         # No pre-fetched context: the model must call the tool itself to get grounded numbers.
         prompt = f"Request: {question}\n\nFilters already established for this investigation: {empirical_context}"
-        return scope_agent_tool_calling().run_sync(prompt).output
+        result = scope_agent_tool_calling().run_sync(prompt)
+        print("=== RAW RESULT ===")
+        print(result)
+        print("=== OUTPUT ===")
+        print(result.output)
+        return result.output
     prompt = f"Request: {question}\n\nEmpirical context (for the filters already established): {empirical_context}"
     return scope_agent().run_sync(prompt).output
 
