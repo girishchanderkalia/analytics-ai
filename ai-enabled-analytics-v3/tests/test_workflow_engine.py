@@ -49,7 +49,7 @@ class FakeContractProvider:
     def get_contract(
         self,
         contract_name: str,
-    ) -> type[Any\]:
+    ) -> type[Any]:
         self.requested_contracts.append(
             contract_name
         )
@@ -75,7 +75,7 @@ class FakeModelGateway:
         system_prompt: str,
         input_text: str,
         output_contract: type[Any],
-    ) -> Mapping[str, Any\]:
+    ) -> Mapping[str, Any]:
         self.invocations.append(
             {
                 "system_prompt": system_prompt,
@@ -149,7 +149,7 @@ class FakeCapabilityDispatcher:
         state: Mapping[str, Any],
         permissions: frozenset[str],
         approved_capabilities: frozenset[str],
-    ) -> Mapping[str, Any\]:
+    ) -> Mapping[str, Any]:
         self.invocations.append(
             capability_id
         )
@@ -271,7 +271,7 @@ class FakeOperationRegistry:
         self,
         name: str,
         state: Mapping[str, Any],
-    ) -> Mapping[str, Any\]:
+    ) -> Mapping[str, Any]:
         self.invocations.append(name)
 
         if name != "analyse_trends":
@@ -314,7 +314,7 @@ def create_engine(
     FakeCapabilityDispatcher,
     FakeOperationRegistry,
     FakeContractProvider,
-\]:
+]:
     """Create a Workflow Engine with deterministic test doubles."""
 
     repository = AgentRepository(
@@ -383,7 +383,7 @@ def run_until_approval(
     WorkflowEngine,
     Any,
     FakeCapabilityDispatcher,
-\]:
+]:
     """Create and run an outlier workflow until approval."""
 
     (
@@ -513,8 +513,10 @@ def test_workflow_completes_when_no_outliers_exist() -> None:
     ]
 
     assert operation_registry.invocations == [
-        "analyse_trends",
-   ct_provider.requested_contracts == [
+        "analyse_trends"
+    ]
+
+    assert contract_provider.requested_contracts == [
         "TrendFilters",
         "DetectionScope",
         "FindingsSummary",
