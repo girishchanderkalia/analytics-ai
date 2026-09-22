@@ -10,8 +10,16 @@ from typing import Any
 AgentFactory = Callable[..., Any]
 
 
-class ModelGatewayBootstrapError(RuntimeError):
-    """Raised when the fixed platform Model Gateway cannot be loaded."""
+class ModelGatewayError(RuntimeError):
+    """Base error raised by the fixed Model Gateway adapter."""
+
+
+class ModelGatewayBootstrapError(ModelGatewayError):
+    """Raised when the platform Model Gateway cannot be loaded."""
+
+
+class ModelGatewayResponseError(ModelGatewayError):
+    """Raised when the hosted model invocation fails."""
 
 
 class PlatformModelGateway:
@@ -48,7 +56,15 @@ class PlatformModelGateway:
             system_prompt=system_prompt,
         )
 
-        result = agent.run_sync(input_text)
+        try:
+            result = agent.run_sync(
+                input_text
+            )
+        except Exception as exc:
+            raise ModelGatewayResponseError(
+                "The hosted model invocation failed"
+            ) from exc
+
         output = result.output
 
         if hasattr(output, "model_dump"):
@@ -68,7 +84,7 @@ def create_model_gateway() -> PlatformModelGateway:
 
 
 def _load_platform_model() -> Any:
-    """Load the existing fixed platform model lazily."""
+    """Load the existing platform model lazily."""
 
     try:
         module = import_module(
@@ -77,8 +93,8 @@ def _load_platform_model() -> Any:
     except ModuleNotFoundError as exc:
         raise ModelGatewayBootstrapError(
             "Cannot import foundation.model_gateway. "
-            "Ensure the repository root containing the "
-            "'foundation' package is on PYTHONPATH."
+            "Ensure the repository root and agent-runtime "
+            "are available on PYTHONPATH."
         ) from exc
 
     get_model = getattr(
@@ -93,7 +109,12 @@ def _load_platform_model() -> Any:
             "a callable get_model()"
         )
 
-    return get_model()
+    try:
+        return get_model()
+    except Exception as exc:
+        raise ModelGatewayBootstrapError(
+            "The platform model could not be created"
+        ) from exc
 
 
 def _default_agent_factory(
@@ -107,7 +128,7 @@ def _default_agent_factory(
         )
     except ModuleNotFoundError as exc:
         raise ModelGatewayBootstrapError(
-            "pydantic-ai is required for real "
+            "pydantic-ai is required for hosted "
             "Model Gateway execution"
         ) from exc
 
@@ -122,4 +143,9 @@ def _default_agent_factory(
             "pydantic_ai must expose Agent"
         )
 
-    return agent_class(**kwargs)
+    try:
+        return agent_class(**kwargs)
+    except Exception as exc:
+        raise ModelGatewayBootstrapError(
+            "The typed model agent could not be created"
+        ) from exc
