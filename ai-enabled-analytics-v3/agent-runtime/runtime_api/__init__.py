@@ -1,19 +1,17 @@
-"""FastAPI transport layer for the Application Agent Runtime."""
+"""FastAPI transport layer for persisted agent conversations."""
 
 from .app import create_app
 from .models import (
-    AgentCatalogResponse,
     ApiErrorResponse,
-    ExecutionResponse,
-    ResumeExecutionRequest,
-    StartExecutionRequest,
+    ChatRequest,
+    ResumeConversationRequest,
+    RuntimeResponseModel,
 )
 
 __all__ = [
-    "AgentCatalogResponse",
     "ApiErrorResponse",
-    "ExecutionResponse",
-    "ResumeExecutionRequest",
-    "StartExecutionRequest",
+    "ChatRequest",
+    "ResumeConversationRequest",
+    "RuntimeResponseModel",
     "create_app",
 ]

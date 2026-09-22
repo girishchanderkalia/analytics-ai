@@ -1,100 +1,93 @@
-"""HTTP routes for catalog, start, and resume operations."""
+"""HTTP routes for persisted chat, resume, and conversation lookup."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 
-from execution.execution_models import ResumeInput
+from host.runtime_models import ChatCommand, ResumeCommand
 
-from .dependencies import get_agent_host
+from .dependencies import get_runtime_service
 from .models import (
-    AgentCatalogResponse,
-    ExecutionResponse,
+    ChatRequest,
     HealthResponse,
-    ResumeExecutionRequest,
-    StartExecutionRequest,
+    ResumeConversationRequest,
+    RuntimeResponseModel,
 )
-from .serialization import execution_response
+from .serialization import runtime_response
 
 
 router = APIRouter()
 
 
-@router.get(
-    "/health",
-    response_model=HealthResponse,
-    tags=["health"],
-)
+@router.get("/health", response_model=HealthResponse, tags=["health"])
 def health() -> HealthResponse:
     """Return a minimal liveness response."""
 
     return HealthResponse(status="ok")
 
 
+@router.post(
+    "/v1/chat",
+    response_model=RuntimeResponseModel,
+    tags=["conversations"],
+)
+def start_chat(
+    request: ChatRequest,
+    service: Any = Depends(get_runtime_service),
+) -> RuntimeResponseModel:
+    """Start a persisted agent conversation."""
+
+    response = service.start_chat(
+        ChatCommand(
+            agent_id=request.agent_id,
+            message=request.message,
+            user_id=request.user_id,
+            application_context=request.application_context,
+        )
+    )
+
+    return runtime_response(response)
+
+
+@router.post(
+    "/v1/conversations/{conversation_id}/resume",
+    response_model=RuntimeResponseModel,
+    tags=["conversations"],
+)
+def resume_conversation(
+    conversation_id: str,
+    request: ResumeConversationRequest,
+    service: Any = Depends(get_runtime_service),
+) -> RuntimeResponseModel:
+    """Resume a persisted conversation without resubmitting workflow state."""
+
+    response = service.resume(
+        ResumeCommand(
+            conversation_id=conversation_id,
+            approved=request.approved,
+            selected_outlier_id=request.selected_outlier_id,
+            comment=request.comment,
+            expected_version=request.expected_version,
+            values=request.values,
+        )
+    )
+
+    return runtime_response(response)
+
+
 @router.get(
-    "/v1/agents",
-    response_model=AgentCatalogResponse,
-    tags=["agents"],
+    "/v1/conversations/{conversation_id}",
+    response_model=RuntimeResponseModel,
+    tags=["conversations"],
 )
-def list_agents(
-    host: Any = Depends(get_agent_host),
-) -> AgentCatalogResponse:
-    """List the agents available through the configured catalog."""
+def get_conversation(
+    conversation_id: str,
+    service: Any = Depends(get_runtime_service),
+) -> RuntimeResponseModel:
+    """Retrieve the latest durable conversation checkpoint."""
 
-    return AgentCatalogResponse(
-        agents=host.catalog.list()
+    return runtime_response(
+        service.get_conversation(conversation_id)
     )
-
-
-@router.post(
-    "/v1/agents/{agent_id}/executions",
-    response_model=ExecutionResponse,
-    status_code=status.HTTP_200_OK,
-    tags=["executions"],
-)
-def start_execution(
-    agent_id: str,
-    request: StartExecutionRequest,
-    host: Any = Depends(get_agent_host),
-) -> ExecutionResponse:
-    """Start a new workflow execution."""
-
-    hosted_result = host.start(
-        agent_id=agent_id,
-        initial_state=request.state,
-        version=request.version,
-    )
-
-    return execution_response(hosted_result)
-
-
-@router.post(
-    "/v1/agents/{agent_id}/executions/resume",
-    response_model=ExecutionResponse,
-    tags=["executions"],
-)
-def resume_execution(
-    agent_id: str,
-    request: ResumeExecutionRequest,
-    host: Any = Depends(get_agent_host),
-) -> ExecutionResponse:
-    """Resume a workflow paused at an approval node."""
-
-    resume_input = ResumeInput(
-        approved=request.approved,
-        selected_outlier_id=request.selected_outlier_id,
-        comment=request.comment,
-        values=request.values,
-    )
-
-    hosted_result = host.resume(
-        agent_id=agent_id,
-        state=request.state,
-        current_node=request.current_node,
-        resume_input=resume_input,
-        version=request.version,
-    )
-
-    return execution_response(hosted_result)

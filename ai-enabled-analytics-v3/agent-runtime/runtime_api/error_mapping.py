@@ -1,26 +1,37 @@
-"""Translate runtime-domain exceptions to stable HTTP responses."""
+"""Translate persisted runtime exceptions to HTTP responses."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from catalog.catalog_models import AgentCatalogError, AgentNotFoundError
-from execution.execution_models import ApprovalResumeError, WorkflowExecutionError
+from host.runtime_models import (
+    ConversationStateError,
+    InvalidRuntimeCommandError,
+    RuntimeServiceError,
+)
+from persistence.persistence_models import (
+    ConversationConflictError,
+    ConversationNotFoundError,
+    ConversationStoreError,
+    InvalidConversationError,
+)
 
-from .dependencies import AgentHostUnavailableError
+from .dependencies import RuntimeServiceUnavailableError
 
 
 def error_response(
     status_code: int,
     code: str,
     message: str,
-    details: list[dict] | None = None,
+    details: list[dict[str, Any]] | None = None,
 ) -> JSONResponse:
-    """Create the common error envelope."""
+    """Create the common API error envelope."""
 
-    body: dict = {
+    body: dict[str, Any] = {
         "error": {
             "code": code,
             "message": message,
@@ -30,57 +41,78 @@ def error_response(
     if details is not None:
         body["error"]["details"] = details
 
-    return JSONResponse(
-        status_code=status_code,
-        content=body,
-    )
+    return JSONResponse(status_code=status_code, content=body)
 
 
 def install_error_handlers(app: FastAPI) -> None:
-    """Register runtime API exception mappings."""
+    """Register persisted Runtime API exception mappings."""
 
-    @app.exception_handler(AgentNotFoundError)
-    async def handle_agent_not_found(
+    @app.exception_handler(ConversationNotFoundError)
+    async def conversation_not_found(
         request: Request,
-        exc: AgentNotFoundError,
+        exc: ConversationNotFoundError,
     ) -> JSONResponse:
         del request
-        return error_response(404, "agent_not_found", str(exc))
+        return error_response(404, "conversation_not_found", str(exc))
 
-    @app.exception_handler(ApprovalResumeError)
-    async def handle_approval_resume(
+    @app.exception_handler(ConversationConflictError)
+    async def conversation_conflict(
         request: Request,
-        exc: ApprovalResumeError,
+        exc: ConversationConflictError,
     ) -> JSONResponse:
         del request
-        return error_response(409, "approval_resume_rejected", str(exc))
+        return error_response(409, "conversation_version_conflict", str(exc))
 
-    @app.exception_handler(WorkflowExecutionError)
-    async def handle_workflow_execution(
+    @app.exception_handler(ConversationStateError)
+    async def conversation_state(
         request: Request,
-        exc: WorkflowExecutionError,
+        exc: ConversationStateError,
     ) -> JSONResponse:
         del request
-        return error_response(422, "workflow_execution_rejected", str(exc))
+        return error_response(409, "conversation_state_conflict", str(exc))
 
-    @app.exception_handler(AgentCatalogError)
-    async def handle_catalog_error(
+    @app.exception_handler(InvalidRuntimeCommandError)
+    async def invalid_command(
         request: Request,
-        exc: AgentCatalogError,
+        exc: InvalidRuntimeCommandError,
     ) -> JSONResponse:
         del request
-        return error_response(400, "agent_catalog_error", str(exc))
+        return error_response(422, "invalid_runtime_command", str(exc))
 
-    @app.exception_handler(AgentHostUnavailableError)
-    async def handle_missing_host(
+    @app.exception_handler(InvalidConversationError)
+    async def invalid_conversation(
         request: Request,
-        exc: AgentHostUnavailableError,
+        exc: InvalidConversationError,
     ) -> JSONResponse:
         del request
-        return error_response(503, "agent_host_unavailable", str(exc))
+        return error_response(422, "invalid_conversation", str(exc))
+
+    @app.exception_handler(RuntimeServiceUnavailableError)
+    async def missing_service(
+        request: Request,
+        exc: RuntimeServiceUnavailableError,
+    ) -> JSONResponse:
+        del request
+        return error_response(503, "runtime_service_unavailable", str(exc))
+
+    @app.exception_handler(ConversationStoreError)
+    async def store_error(
+        request: Request,
+        exc: ConversationStoreError,
+    ) -> JSONResponse:
+        del request
+        return error_response(500, "conversation_store_error", str(exc))
+
+    @app.exception_handler(RuntimeServiceError)
+    async def runtime_error(
+        request: Request,
+        exc: RuntimeServiceError,
+    ) -> JSONResponse:
+        del request
+        return error_response(500, "runtime_service_error", str(exc))
 
     @app.exception_handler(RequestValidationError)
-    async def handle_request_validation(
+    async def request_validation(
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:

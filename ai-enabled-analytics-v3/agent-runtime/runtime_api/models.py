@@ -1,4 +1,4 @@
-"""Pydantic transport models for the Application Agent Runtime API."""
+"""Pydantic transport models for the persisted Runtime API."""
 
 from __future__ import annotations
 
@@ -13,65 +13,38 @@ class StrictApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class StartExecutionRequest(StrictApiModel):
-    """Request to start a new agent workflow execution."""
+class ChatRequest(StrictApiModel):
+    """Start a new persisted agent conversation."""
 
-    version: str | None = None
-    state: dict[str, Any] = Field(default_factory=dict)
+    agent_id: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    user_id: str | None = None
+    application_context: dict[str, Any] = Field(default_factory=dict)
 
 
-class ResumeExecutionRequest(StrictApiModel):
-    """Request to resume an interrupted approval node."""
+class ResumeConversationRequest(StrictApiModel):
+    """Resume a persisted conversation waiting for approval."""
 
-    version: str | None = None
-    state: dict[str, Any]
-    current_node: str = Field(min_length=1)
     approved: bool
     selected_outlier_id: str | None = None
     comment: str | None = None
+    expected_version: int | None = Field(default=None, ge=1)
     values: dict[str, Any] = Field(default_factory=dict)
 
 
-class ApprovalRequestResponse(BaseModel):
-    """Approval details returned to an API consumer."""
+class RuntimeResponseModel(BaseModel):
+    """Application-facing persisted runtime response."""
 
-    model_config = ConfigDict(extra="allow")
-
-    approval_id: str | None = None
-    node_id: str | None = None
-    public_type: str | None = None
-
-
-class ExecutionResponse(BaseModel):
-    """Stable transport representation of a hosted execution result."""
-
+    conversation_id: str
     agent_id: str
-    agent_version: str
     status: str
-    state: dict[str, Any]
-    current_node: str | None = None
-    approval_request: ApprovalRequestResponse | None = None
-    error: str | None = None
-
-
-class AgentCatalogItemResponse(BaseModel):
-    """Public metadata for one catalog entry."""
-
-    agent_id: str
-    version: str
-    display_name: str
-    directory_name: str
-    agent_directory: str
-
-
-class AgentCatalogResponse(BaseModel):
-    """List of agents available to the runtime API."""
-
-    agents: list[AgentCatalogItemResponse]
+    version: int
+    result: dict[str, Any]
+    approval_request: dict[str, Any] | None = None
 
 
 class HealthResponse(BaseModel):
-    """Minimal liveness response."""
+    """Liveness response."""
 
     status: str
 

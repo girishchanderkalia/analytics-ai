@@ -1,4 +1,4 @@
-"""FastAPI dependency providers for runtime services."""
+"""FastAPI dependency providers for persisted runtime services."""
 
 from __future__ import annotations
 
@@ -7,18 +7,18 @@ from typing import Any
 from fastapi import Request
 
 
-class AgentHostUnavailableError(RuntimeError):
-    """Raised when the FastAPI application has no configured Agent Host."""
+class RuntimeServiceUnavailableError(RuntimeError):
+    """Raised when no persisted Runtime Service is configured."""
 
 
-def get_agent_host(request: Request) -> Any:
-    """Resolve the configured Agent Host from application state."""
+def get_runtime_service(request: Request) -> Any:
+    """Resolve the configured Runtime Service from application state."""
 
-    host = getattr(request.app.state, "agent_host", None)
+    service = getattr(request.app.state, "runtime_service", None)
 
-    if host is None:
-        raise AgentHostUnavailableError(
-            "The Application Agent Runtime host is not configured"
+    if service is None:
+        raise RuntimeServiceUnavailableError(
+            "The persisted Application Agent Runtime service is not configured"
         )
 
-    return host
+    return service

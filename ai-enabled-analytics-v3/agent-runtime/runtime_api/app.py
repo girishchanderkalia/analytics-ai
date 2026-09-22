@@ -1,4 +1,4 @@
-"""FastAPI application factory for the Application Agent Runtime."""
+"""FastAPI application factory for the persisted Runtime Service."""
 
 from __future__ import annotations
 
@@ -10,18 +10,18 @@ from .error_mapping import install_error_handlers
 from .routes import router
 
 
-def create_app(agent_host: Any | None = None) -> FastAPI:
-    """Create a FastAPI application with an optional Agent Host."""
+def create_app(runtime_service: Any | None = None) -> FastAPI:
+    """Create a FastAPI app and inject the persisted Runtime Service."""
 
     app = FastAPI(
         title="Application Agent Runtime API",
-        version="1.0.0",
+        version="2.0.0",
         description=(
-            "Start and resume declarative application-agent workflows."
+            "Start, resume, and inspect durable application-agent conversations."
         ),
     )
 
-    app.state.agent_host = agent_host
+    app.state.runtime_service = runtime_service
     install_error_handlers(app)
     app.include_router(router)
 
