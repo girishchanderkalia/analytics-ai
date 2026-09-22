@@ -1,17 +1,13 @@
-"""FastAPI transport layer for persisted agent conversations."""
+"""FastAPI transport and production composition for agent conversations."""
 
 from .app import create_app
-from .models import (
-    ApiErrorResponse,
-    ChatRequest,
-    ResumeConversationRequest,
-    RuntimeResponseModel,
-)
+from .production_app import create_production_app
+from .production_composition import create_production_runtime_service
+from .settings import RuntimeSettings
 
 __all__ = [
-    "ApiErrorResponse",
-    "ChatRequest",
-    "ResumeConversationRequest",
-    "RuntimeResponseModel",
+    "RuntimeSettings",
     "create_app",
+    "create_production_app",
+    "create_production_runtime_service",
 ]

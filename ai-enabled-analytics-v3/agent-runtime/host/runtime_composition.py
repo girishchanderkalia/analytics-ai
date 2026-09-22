@@ -12,6 +12,18 @@ from execution.execution_context import ExecutionContext
 from execution.operation_registry import OperationRegistry
 from execution.workflow_engine import WorkflowEngine
 
+from dataclasses import dataclass
+from pathlib import Path
+
+from execution.definition_loader import AgentRepository
+from execution.execution_context import ExecutionContext
+from execution.workflow_engine import WorkflowEngine
+from persistence.sqlite_conversation_store import (
+    SQLiteConversationStore,
+)
+
+from .runtime_service import RuntimeService
+
 
 class RuntimeCompositionError(ValueError):
     """Raised when an executable agent runtime cannot be composed."""
@@ -151,3 +163,54 @@ class RuntimeComposer:
     def _no_permissions(entry: AgentCatalogEntry) -> Collection[str]:
         del entry
         return ()
+
+@dataclass(frozen=True)
+class RuntimeDependencies:
+    """Fixed dependencies supplied by the framework bootstrap."""
+
+    execution_context: ExecutionContext
+
+
+def create_runtime_service(
+    *,
+    repository_root: Path | str,
+    database_path: Path | str,
+    dependencies: RuntimeDependencies,
+    maximum_steps: int = 100,
+) -> RuntimeService:
+    """Compose the persisted Runtime Service.
+
+    The framework bootstrap owns construction of the fixed ExecutionContext.
+    This function adds the agent repository, Workflow Engine creation, and
+    durable conversation persistence.
+    """
+
+    if maximum_steps <= 0:
+        raise ValueError(
+            "maximum_steps must be greater than zero"
+        )
+
+    root = Path(repository_root).expanduser().resolve()
+
+    agent_repository = AgentRepository(
+        root / "ai-agents"
+    )
+
+    conversation_store = SQLiteConversationStore(
+        database_path
+    )
+
+    def engine_factory(
+        bundle: object,
+    ) -> WorkflowEngine:
+        return WorkflowEngine(
+            bundle=bundle,
+            context=dependencies.execution_context,
+            maximum_steps=maximum_steps,
+        )
+
+    return RuntimeService(
+        agent_repository=agent_repository,
+        conversation_store=conversation_store,
+        engine_factory=engine_factory,
+    )
