@@ -18,4 +18,6 @@ def get_llm() -> AzureChatOpenAI:
         api_version=settings.api_version,
         api_key=get_api_key(),
         temperature=settings.temperature,
+        timeout=settings.request_timeout_s,
+        max_retries=0,
     )

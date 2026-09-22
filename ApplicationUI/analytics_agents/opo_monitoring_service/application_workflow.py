@@ -111,6 +111,7 @@ def _keep_last(_current: Any, incoming: Any) -> Any:
 
 class InvestigationState(TypedDict, total=False):
     question: str
+    use_tool_calling: bool
     mode: str
     limit_value: float
     requested_limit_value: float
@@ -177,10 +178,19 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
     threshold_recommendation: dict[str, Any] = {}
     suggested_limit_value: float | None = None
     suggested_limit_rationale: str | None = None
+    threshold_match = re.search(
+        r"\b(above|below|over|under|greater than|less than|more than|at least)\s+"
+        r"(\d+(?:\.\d+)?)\s*(%)?",
+        question,
+        re.IGNORECASE,
+    )
     # Empirical context for a *default* (unfiltered, 14-day) lookback, computed up front
     # with no LLM call so the single model call below can recommend a cutoff in the same
     # response instead of needing a second round-trip once filters are known.
-    default_threshold_context = services.get_kpi_threshold_context(days=14)
+    default_threshold_context = (
+        {} if threshold_match or state.get("use_tool_calling")
+        else services.get_kpi_threshold_context(days=14)
+    )
     try:
         with session_memory.timed_event("model_call", {"purpose": "scope_interpretation"}):
             scope = get_llm().with_structured_output(DetectionScope).invoke(
@@ -213,7 +223,11 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
         suggested_limit_rationale = scope.suggested_limit_rationale
         session_memory.record_event(
             "model_interpretation",
-            {"request": question, "interpretation": scope.model_dump()},
+            {
+                "request": question,
+                "interpretation": scope.model_dump(),
+                "use_tool_calling": state.get("use_tool_calling", False),
+            },
             source="application",
         )
     except Exception:
@@ -224,12 +238,6 @@ def parse_scope(state: InvestigationState) -> InvestigationState:
             source="application",
         )
 
-    threshold_match = re.search(
-        r"\b(above|below|over|under|greater than|less than|more than|at least)\s+"
-        r"(\d+(?:\.\d+)?)\s*(%)?",
-        question,
-        re.IGNORECASE,
-    )
     if threshold_match:
         mode = "absolute"
         direction = "below" if threshold_match.group(1).lower() in {"below", "under", "less than"} else "above"
