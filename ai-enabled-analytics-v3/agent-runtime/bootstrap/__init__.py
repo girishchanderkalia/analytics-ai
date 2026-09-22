@@ -5,6 +5,15 @@ from .capability_dispatcher_adapter import (
     FixedCapabilityDispatcher,
     create_capability_dispatcher,
 )
+from .contract_provider import (
+    AgentContractKey,
+    BundleContractProvider,
+    ContractProviderCache,
+    ContractProviderError,
+    InvalidContractDefinitionError,
+    UnknownContractError,
+    create_contract_provider,
+)
 from .fixed_runtime_bootstrap import (
     create_application,
     create_execution_context,
@@ -22,14 +31,21 @@ from .operation_registry_bootstrap import (
 )
 
 __all__ = [
+    "AgentContractKey",
+    "BundleContractProvider",
     "CapabilityRegistryProtocol",
+    "ContractProviderCache",
+    "ContractProviderError",
     "FixedCapabilityDispatcher",
+    "InvalidContractDefinitionError",
     "ModelGatewayBootstrapError",
     "OperationHandler",
     "OperationRegistryBootstrapError",
     "PlatformModelGateway",
+    "UnknownContractError",
     "create_application",
     "create_capability_dispatcher",
+    "create_contract_provider",
     "create_execution_context",
     "create_model_gateway",
     "create_operation_registry",
