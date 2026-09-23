@@ -23,3 +23,11 @@ class GraphInvocationError(AgentRuntimeError):
 
 class GraphStateUnavailableError(AgentRuntimeError):
     """Raised when a graph state snapshot cannot be retrieved."""
+
+
+class GraphResumeUnavailableError(AgentRuntimeError):
+    """Raised when resume is requested without resumable persistence."""
+
+
+class InvalidResumeRequestError(AgentRuntimeError, ValueError):
+    """Raised when a resume request is incomplete or invalid."""
