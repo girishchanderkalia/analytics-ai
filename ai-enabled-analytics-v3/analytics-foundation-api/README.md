@@ -1,7 +1,5 @@
-# Analytics Foundation API contract
+# Deployable mock Analytics Foundation service
 
-Slice 13A defines the stable HTTP boundary shared by deterministic application
-BFF calls and governed MCP tools.
+The service implements the Slice 13A HTTP contract over file-backed JSON repositories. The bundled data files are intentionally empty. Deployments must mount approved mock datasets as `trend_rows.json` and `wafer_rows.json` under `ANALYTICS_FOUNDATION_DATA_DIR`.
 
-This slice is contract-only. It does not include service implementation, mock
-data, agent orchestration, prompts, findings, or approval behavior.
+Both MCP tools and deterministic application BFF clients must consume this service over HTTP. They must not import this repository implementation.
