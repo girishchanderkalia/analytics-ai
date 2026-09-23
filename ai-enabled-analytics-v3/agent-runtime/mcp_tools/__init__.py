@@ -1,9 +1,59 @@
-"""Governed MCP tool registry and invocation infrastructure."""
-from .audit import InMemoryMCPToolAuditSink, MCPToolAuditEvent
+"""Generic MCP registry with temporary governed-invocation compatibility."""
+
 from .client import MCPClient, MCPDiscoveredTool, MCPToolResult
-from .errors import *
-from .invocation import MCPToolInvoker
-from .models import MCPApprovalMode, MCPServerRegistration, MCPToolRegistration, MCPToolSecurityContext
-from .policy import MCPToolPolicy
-from .registry import MCPToolRegistry
-__all__ = ["InMemoryMCPToolAuditSink", "MCPToolAuditEvent", "MCPClient", "MCPDiscoveredTool", "MCPToolResult", "MCPToolInvoker", "MCPApprovalMode", "MCPServerRegistration", "MCPToolRegistration", "MCPToolSecurityContext", "MCPToolPolicy", "MCPToolRegistry"]
+from .discovery import McpToolDiscoveryService
+from .errors import (
+    DuplicateMcpToolError,
+    InvalidMcpToolError,
+    MCPRegistrationError,
+    MCPServerNotFoundError,
+    MCPToolApprovalRequiredError,
+    MCPToolAuthorizationError,
+    MCPToolError,
+    MCPToolInvocationError,
+    MCPToolNotFoundError,
+    MCPToolSchemaError,
+    McpToolAllowlistError,
+    McpToolNotFoundError,
+    McpToolRegistryError,
+)
+from .models import (
+    AgentToolReference,
+    MCPApprovalMode,
+    MCPServerRegistration,
+    MCPToolRegistration,
+    MCPToolSecurityContext,
+    McpToolDescriptor,
+    McpToolKey,
+)
+from .protocols import McpToolDiscoveryClient
+from .registry import McpToolRegistry
+
+__all__ = [
+    "AgentToolReference",
+    "DuplicateMcpToolError",
+    "InvalidMcpToolError",
+    "MCPApprovalMode",
+    "MCPClient",
+    "MCPDiscoveredTool",
+    "MCPRegistrationError",
+    "MCPServerNotFoundError",
+    "MCPToolApprovalRequiredError",
+    "MCPToolAuthorizationError",
+    "MCPToolError",
+    "MCPToolInvocationError",
+    "MCPToolNotFoundError",
+    "MCPToolRegistration",
+    "MCPToolResult",
+    "MCPToolSchemaError",
+    "MCPToolSecurityContext",
+    "MCPServerRegistration",
+    "McpToolAllowlistError",
+    "McpToolDescriptor",
+    "McpToolDiscoveryClient",
+    "McpToolDiscoveryService",
+    "McpToolKey",
+    "McpToolNotFoundError",
+    "McpToolRegistry",
+    "McpToolRegistryError",
+]
