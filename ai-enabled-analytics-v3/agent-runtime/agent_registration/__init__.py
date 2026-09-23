@@ -14,6 +14,7 @@ from .models import (
     BulkAgentRegistrationResult,
     RegistrationStatus,
 )
+from .package_validator import GenericAgentPackageRegistrationValidator, fingerprint_agent_package
 from .service import AgentRegistrationService, AgentRegistrationValidator
 
 __all__ = [
@@ -27,6 +28,8 @@ __all__ = [
     "AgentRegistrationValidator",
     "BulkAgentRegistrationRequest",
     "BulkAgentRegistrationResult",
+    "GenericAgentPackageRegistrationValidator",
     "InMemoryAgentRegistrationCatalog",
     "RegistrationStatus",
+    "fingerprint_agent_package",
 ]
