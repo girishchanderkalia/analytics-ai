@@ -1,22 +1,14 @@
-# Slice 12: Runtime Service migration to central LangGraph runtime
+# Slice 12: Runtime Service migration
 
-This slice adds an additive LangGraph-backed Runtime Service. It resolves an
-active or exact immutable agent version, caches compiled graphs by agent ID,
-version and definition digest, starts and resumes through the compiled graph,
-and maps interrupts to the existing public approval contract.
+This additive slice introduces a transport-neutral Runtime Service facade that
+routes start, resume, and state retrieval exclusively through
+`LangGraphAgentRuntime`. The conversation ID becomes LangGraph's thread ID.
 
-The metadata store persists only public conversation metadata. Authoritative
-graph state remains in the LangGraph checkpointer.
+The slice also provides a lifecycle composition boundary that starts the
+persistent checkpointer before constructing the central runtime and shuts down
+the checkpointer during application shutdown.
 
-## Test
-
-```bash
-PYTHONPATH=".;./agent-runtime" python -m pytest tests/host/test_langgraph_runtime_service.py tests/host/test_compiled_agent_cache.py tests/host/test_langgraph_result_mapper.py -v --tb=short
-PYTHONPATH=".;./agent-runtime" python -m pytest tests -q --tb=short
-```
-
-## Integration boundary
-
-Do not remove the previous Runtime Service until API parity tests pass. Wire the
-new service behind the existing `/v1/chat` and resume routes through dependency
-injection, then delete the old dual execution path in a separate cleanup commit.
+The legacy Runtime Service is not overwritten in this ZIP because its current
+public request and response types were not part of the supplied Slice 12 input.
+Applications can adopt this facade directly, or a thin API adapter can map the
+existing HTTP contract to these models without reintroducing WorkflowEngine.
