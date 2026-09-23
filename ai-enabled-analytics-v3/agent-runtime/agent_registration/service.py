@@ -66,3 +66,7 @@ class AgentRegistrationService:
             status=RegistrationStatus.REGISTERED,
             registrations=registrations,
         )
+
+    def list_for_application(self, application_id: str):
+        """List registrations explicitly owned by one application."""
+        return self.catalog.list_for_application(application_id)
