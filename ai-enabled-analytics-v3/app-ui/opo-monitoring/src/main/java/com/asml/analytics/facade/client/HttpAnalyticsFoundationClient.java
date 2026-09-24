@@ -1,7 +1,6 @@
 package com.asml.analytics.facade.client;
-import com.asml.analytics.facade.dto.foundation.FoundationDtos.*;
+import com.asml.analytics.facade.dto.foundation.*;
 import org.springframework.web.client.RestClient;
-
 public final class HttpAnalyticsFoundationClient implements AnalyticsFoundationClient {
     private final RestClient client;
     public HttpAnalyticsFoundationClient(RestClient client) { this.client = client; }
@@ -13,5 +12,8 @@ public final class HttpAnalyticsFoundationClient implements AnalyticsFoundationC
     public RegistrationResponse registerDataset(String id, RegistrationRequest r) { return call(() -> client.post().uri("/workspaces/{id}/registrations",id).body(r).retrieve().body(RegistrationResponse.class)); }
     public RegistrationResponse getRegistration(String w, String r) { return call(() -> client.get().uri("/workspaces/{w}/registrations/{r}",w,r).retrieve().body(RegistrationResponse.class)); }
     public WaferQueryResponse queryWafers(WaferQueryRequest r) { return call(() -> client.post().uri("/wafers/query").body(r).retrieve().body(WaferQueryResponse.class)); }
-    private <T> T call(java.util.concurrent.Callable<T> action) { try { T value=action.call(); if(value==null) throw new IllegalStateException("Empty foundation response"); return value; } catch(Exception error) { throw new DownstreamClientException("analytics-foundation",error); } }
+    private <T> T call(java.util.concurrent.Callable<T> action) {
+        try { T value=action.call(); if(value==null) throw new IllegalStateException("Empty foundation response"); return value; }
+        catch(Exception error) { throw new DownstreamClientException("analytics-foundation",error); }
+    }
 }

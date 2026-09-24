@@ -1,91 +1,44 @@
 package com.asml.analytics.facade.config;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConfigurationProperties(prefix = "downstream-services")
-public class DownstreamServiceProperties {
+@ConfigurationProperties(prefix = "downstream")
+public record DownstreamServiceProperties(
+        Service runtimeService,
+        Service analyticsFoundation) {
 
-    private final Service runtime = new Service();
-    private final Service analyticsFoundation = new Service();
-
-    public Service getRuntime() {
-        return runtime;
+    public DownstreamServiceProperties {
+        runtimeService = requireService(runtimeService, "runtime-service");
+        analyticsFoundation = requireService(
+                analyticsFoundation,
+                "analytics-foundation");
     }
 
-    public Service getAnalyticsFoundation() {
-        return analyticsFoundation;
+    private static Service requireService(Service service, String name) {
+        if (service == null) {
+            throw new IllegalArgumentException(
+                    "downstream." + name + " configuration is required");
+        }
+        return service;
     }
 
-    // Accessors used by DownstreamClientConfiguration.
-    public Service runtimeService() {
-        return runtime;
-    }
+    public record Service(
+            String baseUrl,
+            Duration connectTimeout,
+            Duration readTimeout) {
 
-    public Service analyticsFoundation() {
-        return analyticsFoundation;
-    }
-
-    public static class Service {
-        private String baseUrl;
-        private int connectTimeoutSeconds = 5;
-        private int readTimeoutSeconds = 30;
-
-        public String getBaseUrl() {
-            return baseUrl;
-        }
-
-        // Record-style accessor used by DownstreamClientConfiguration.
-        public String baseUrl() {
-            return baseUrl;
-        }
-
-        public void setBaseUrl(String baseUrl) {
-            this.baseUrl = normalizeBaseUrl(baseUrl);
-        }
-
-        public int getConnectTimeoutSeconds() {
-            return connectTimeoutSeconds;
-        }
-
-        public int connectTimeoutSeconds() {
-            return connectTimeoutSeconds;
-        }
-
-        public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
-            this.connectTimeoutSeconds = requirePositive(
-                    connectTimeoutSeconds,
-                    "connectTimeoutSeconds");
-        }
-
-        public int getReadTimeoutSeconds() {
-            return readTimeoutSeconds;
-        }
-
-        public int readTimeoutSeconds() {
-            return readTimeoutSeconds;
-        }
-
-        public void setReadTimeoutSeconds(int readTimeoutSeconds) {
-            this.readTimeoutSeconds = requirePositive(
-                    readTimeoutSeconds,
-                    "readTimeoutSeconds");
-        }
-
-        private static String normalizeBaseUrl(String value) {
-            if (value == null || value.isBlank()) {
-                return value;
+        public Service {
+            if (baseUrl == null || baseUrl.isBlank()) {
+                throw new IllegalArgumentException("baseUrl must not be blank");
             }
-            String result = value.trim();
-            while (result.endsWith("/")) {
-                result = result.substring(0, result.length() - 1);
-            }
-            return result;
+            baseUrl = baseUrl.replaceAll("/+$", "");
+            connectTimeout = positive(connectTimeout, "connectTimeout");
+            readTimeout = positive(readTimeout, "readTimeout");
         }
 
-        private static int requirePositive(int value, String field) {
-            if (value <= 0) {
+        private static Duration positive(Duration value, String field) {
+            if (value == null || value.isZero() || value.isNegative()) {
                 throw new IllegalArgumentException(field + " must be positive");
             }
             return value;

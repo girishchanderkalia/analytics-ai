@@ -1,18 +1,12 @@
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
 
 downstream:
   runtime-service:
-    base-url: ${RUNTIME_SERVICE_BASE_URL:http://localhost:8000}
-    connect-timeout: 5s
-    read-timeout: 60s
+    base-url: ${RUNTIME_SERVICE_BASE_URL:http://127.0.0.1:8100}
+    connect-timeout: ${RUNTIME_SERVICE_CONNECT_TIMEOUT:5s}
+    read-timeout: ${RUNTIME_SERVICE_READ_TIMEOUT:60s}
   analytics-foundation:
-    base-url: ${ANALYTICS_FOUNDATION_BASE_URL:http://localhost:8200}
-    connect-timeout: 5s
-    read-timeout: 60s
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
+    base-url: ${ANALYTICS_FOUNDATION_BASE_URL:http://127.0.0.1:8200}
+    connect-timeout: ${ANALYTICS_FOUNDATION_CONNECT_TIMEOUT:5s}
+    read-timeout: ${ANALYTICS_FOUNDATION_READ_TIMEOUT:60s}

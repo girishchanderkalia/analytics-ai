@@ -1,6 +1,7 @@
 package com.asml.analytics.facade.controller;
 import com.asml.analytics.facade.client.AnalyticsFoundationClient;
-import com.asml.analytics.facade.dto.foundation.FoundationDtos.*;
+import com.asml.analytics.facade.dto.foundation.WaferQueryRequest;
+import com.asml.analytics.facade.dto.foundation.WaferQueryResponse;
 import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api/wafers")
 public class WaferController {

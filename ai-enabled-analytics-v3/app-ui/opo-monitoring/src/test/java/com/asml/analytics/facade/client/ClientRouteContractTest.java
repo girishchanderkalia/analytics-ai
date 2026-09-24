@@ -1,11 +1,25 @@
 package com.asml.analytics.facade.client;
-import static org.assertj.core.api.Assertions.assertThat;
-import java.lang.reflect.Method;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+
 class ClientRouteContractTest {
-    @Test void clientsAreSeparatedByInterface(){
-        assertThat(methodNames(RuntimeServiceClient.class)).containsExactlyInAnyOrder("chat","resume","getConversation");
-        assertThat(methodNames(AnalyticsFoundationClient.class)).contains("queryTrends","getDistribution","createWorkspace","queryWafers");
+    @Test
+    void clientsUseSeparatedDownstreamRoutes() throws Exception {
+        String runtime = Files.readString(Path.of(
+                "src/main/java/com/asml/analytics/facade/client/HttpRuntimeServiceClient.java"));
+        String foundation = Files.readString(Path.of(
+                "src/main/java/com/asml/analytics/facade/client/HttpAnalyticsFoundationClient.java"));
+
+        assertTrue(runtime.contains("/v1/chat"));
+        assertTrue(runtime.contains("/v1/conversations/"));
+        assertTrue(!runtime.contains("/trends/query"));
+        assertTrue(foundation.contains("/trends/query"));
+        assertTrue(foundation.contains("/workspaces"));
+        assertTrue(foundation.contains("/wafers/query"));
+        assertTrue(!foundation.contains("/v1/chat"));
     }
-    private static String[] methodNames(Class<?> type){return java.util.Arrays.stream(type.getDeclaredMethods()).map(Method::getName).toArray(String[]::new);}
 }
