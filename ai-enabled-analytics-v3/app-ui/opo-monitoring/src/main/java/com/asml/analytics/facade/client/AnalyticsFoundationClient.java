@@ -1,5 +1,7 @@
 package com.asml.analytics.facade.client;
+
 import com.asml.analytics.facade.dto.foundation.*;
+
 public interface AnalyticsFoundationClient {
     TrendResponse queryTrends(TrendQuery request);
     DistributionResponse getDistribution(DistributionQuery request);

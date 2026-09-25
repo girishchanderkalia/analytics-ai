@@ -1,37 +1,47 @@
 package com.asml.analytics.facade.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.http.HttpClient;
-import java.time.Duration;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import com.asml.analytics.facade.client.AnalyticsFoundationClient;
+import com.asml.analytics.facade.client.HttpAnalyticsFoundationClient;
+import com.asml.analytics.facade.client.HttpRuntimeServiceClient;
+import com.asml.analytics.facade.client.RuntimeServiceClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestClient;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
-@Configuration
-@EnableConfigurationProperties(DownstreamServiceProperties.class)
+@Configuration(proxyBeanMethods = false)
 public class DownstreamClientConfiguration {
 
-    @Bean("runtimeServiceHttpClient")
-    HttpClient runtimeServiceHttpClient(
-            DownstreamServiceProperties properties) {
-        return client(properties.runtimeService().connectTimeout());
-    }
+        @Bean
+        RuntimeServiceClient runtimeServiceClient(
+                        RestClient.Builder builder,
+                        @Value("${downstream.runtime-service.base-url}") String baseUrl) {
 
-    @Bean("analyticsFoundationHttpClient")
-    HttpClient analyticsFoundationHttpClient(
-            DownstreamServiceProperties properties) {
-        return client(properties.analyticsFoundation().connectTimeout());
-    }
+                RestClient client = builder
+                                .clone()
+                                .baseUrl(baseUrl)
+                                .build();
 
-    @Bean
-    ObjectMapper downstreamObjectMapper() {
-        return new ObjectMapper().findAndRegisterModules();
-    }
+                return new HttpRuntimeServiceClient(client);
+        }
 
-    private static HttpClient client(Duration connectTimeout) {
-        return HttpClient.newBuilder()
-                .connectTimeout(connectTimeout)
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
-    }
+        @Bean
+        AnalyticsFoundationClient analyticsFoundationClient(
+                        RestClient.Builder builder,
+                        @Value("${downstream.analytics-foundation.base-url}") String baseUrl) {
+
+                SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+
+                requestFactory.setConnectTimeout(5_000);
+                requestFactory.setReadTimeout(60_000);
+
+                RestClient client = builder
+                                .clone()
+                                .baseUrl(baseUrl)
+                                .requestFactory(requestFactory)
+                                .build();
+
+                return new HttpAnalyticsFoundationClient(client);
+        }
 }

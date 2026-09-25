@@ -1,6 +1,5 @@
 package com.asml.analytics.facade.config;
 
-import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "downstream")
@@ -9,39 +8,19 @@ public record DownstreamServiceProperties(
         Service analyticsFoundation) {
 
     public DownstreamServiceProperties {
-        runtimeService = requireService(runtimeService, "runtime-service");
-        analyticsFoundation = requireService(
-                analyticsFoundation,
-                "analytics-foundation");
-    }
-
-    private static Service requireService(Service service, String name) {
-        if (service == null) {
-            throw new IllegalArgumentException(
-                    "downstream." + name + " configuration is required");
+        if (runtimeService == null) {
+            throw new IllegalArgumentException("downstream.runtime-service is required");
         }
-        return service;
+        if (analyticsFoundation == null) {
+            throw new IllegalArgumentException("downstream.analytics-foundation is required");
+        }
     }
 
-    public record Service(
-            String baseUrl,
-            Duration connectTimeout,
-            Duration readTimeout) {
-
+    public record Service(String baseUrl) {
         public Service {
             if (baseUrl == null || baseUrl.isBlank()) {
-                throw new IllegalArgumentException("baseUrl must not be blank");
+                throw new IllegalArgumentException("Downstream base URL is required");
             }
-            baseUrl = baseUrl.replaceAll("/+$", "");
-            connectTimeout = positive(connectTimeout, "connectTimeout");
-            readTimeout = positive(readTimeout, "readTimeout");
-        }
-
-        private static Duration positive(Duration value, String field) {
-            if (value == null || value.isZero() || value.isNegative()) {
-                throw new IllegalArgumentException(field + " must be positive");
-            }
-            return value;
         }
     }
 }

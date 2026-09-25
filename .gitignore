@@ -16,3 +16,6 @@ target/
 # v2 local dev / deploy scratch (docker save output, never committed)
 ai-enabled-analytics-v2/deploy/*.tar
 
+.run/
+
+

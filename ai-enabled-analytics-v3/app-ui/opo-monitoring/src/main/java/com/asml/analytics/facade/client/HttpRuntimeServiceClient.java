@@ -1,59 +1,40 @@
 package com.asml.analytics.facade.client;
 
-import com.asml.analytics.facade.config.DownstreamServiceProperties;
 import com.asml.analytics.facade.dto.runtime.ChatRequest;
 import com.asml.analytics.facade.dto.runtime.ResumeRequest;
 import com.asml.analytics.facade.dto.runtime.RuntimeResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.nio.charset.StandardCharsets;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
+import java.util.concurrent.Callable;
+import org.springframework.web.client.RestClient;
 
-@Component
 public final class HttpRuntimeServiceClient implements RuntimeServiceClient {
-    private final JsonHttpSupport http;
+    private final RestClient client;
 
-    public HttpRuntimeServiceClient(
-            @Qualifier("runtimeServiceHttpClient") HttpClient client,
-            ObjectMapper mapper,
-            DownstreamServiceProperties properties) {
-        var service = properties.runtimeService();
-        this.http = new JsonHttpSupport(
-                client,
-                mapper,
-                service.baseUrl(),
-                service.readTimeout());
+    public HttpRuntimeServiceClient(RestClient client) {
+        this.client = client;
     }
 
     @Override
-    public RuntimeResponse start(ChatRequest request) {
-        return http.post("/v1/chat", request, RuntimeResponse.class);
+    public RuntimeResponse chat(ChatRequest request) {
+        return call(() -> client.post().uri("/v1/chat").body(request).retrieve().body(RuntimeResponse.class));
     }
 
     @Override
-    public RuntimeResponse resume(
-            String conversationId,
-            ResumeRequest request) {
-        return http.post(
-                "/v1/conversations/" + segment(conversationId) + "/resume",
-                request,
-                RuntimeResponse.class);
+    public RuntimeResponse resume(String conversationId, ResumeRequest request) {
+        return call(() -> client.post().uri("/v1/conversations/{conversationId}/resume", conversationId).body(request).retrieve().body(RuntimeResponse.class));
     }
 
     @Override
     public RuntimeResponse getConversation(String conversationId) {
-        return http.get(
-                "/v1/conversations/" + segment(conversationId),
-                RuntimeResponse.class);
+        return call(() -> client.get().uri("/v1/conversations/{conversationId}", conversationId).retrieve().body(RuntimeResponse.class));
     }
 
-    private static String segment(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("conversationId must not be blank");
+    private <T> T call(Callable<T> action) {
+        try {
+            T result = action.call();
+            if (result == null) throw new IllegalStateException("Empty Runtime Service response");
+            return result;
+        } catch (Exception error) {
+            throw new DownstreamClientException("runtime-service", error);
         }
-        return URLEncoder.encode(value, StandardCharsets.UTF_8)
-                .replace("+", "%20");
     }
 }
