@@ -13,5 +13,5 @@ Mount the router with `app.include_router(mcp_tool_routes.router)` and set `app.
 ## Test
 
 ```bash
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/test_mcp_tool_registry.py tests/test_mcp_tool_invocation.py -v --tb=short
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/test_mcp_tool_registry.py tests/test_mcp_tool_invocation.py -v --tb=short
 ```

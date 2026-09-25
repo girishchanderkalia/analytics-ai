@@ -15,6 +15,6 @@ environment variable.
 
 ```bash
 python -m compileall agent-runtime tests -q
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/test_per_agent_contract_provider.py -v
-PYTHONPATH=".:./agent-runtime" python -m pytest tests -q
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/test_per_agent_contract_provider.py -v
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests -q
 ```

@@ -64,7 +64,7 @@ export RUNTIME_SERVICE_BASE_URL="${RUNTIME_SERVICE_BASE_URL:-http://127.0.0.1:$R
 export SERVER_PORT="$BFF_PORT"
 
 # Windows Python uses semicolon-separated PYTHONPATH entries.
-export PYTHONPATH="${ROOT_DIR}/analytics-foundation-api;${ROOT_DIR}/analytics-foundation-mcp/src;${ROOT_DIR}/opo-capability-service/src;${ROOT_DIR}/opo-deterministic-logic/src;${ROOT_DIR}/analytics-foundation-client/src;${ROOT_DIR}/agent-runtime${PYTHONPATH:+;$PYTHONPATH}"
+export PYTHONPATH="${ROOT_DIR}/analytics-foundation/analytics-foundation-api;${ROOT_DIR}/analytics-foundation/analytics-foundation/analytics-foundation-mcp/src;${ROOT_DIR}/app-ui/opo-monitoring/opo-monitoring-service/app-ui/opo-monitoring/opo-monitoring-service/opo-capability-service/src;${ROOT_DIR}/app-ui/opo-monitoring/opo-monitoring-service/app-ui/opo-monitoring/opo-monitoring-service/opo-deterministic-logic/src;${ROOT_DIR}/analytics-foundation/analytics-foundation/analytics-foundation-client/src;${ROOT_DIR}/agent-framework/agent-runtime${PYTHONPATH:+;$PYTHONPATH}"
 
 echo "Using Java:   $JAVA_EXE"
 echo "Using Python: $PYTHON_BIN"
@@ -168,13 +168,13 @@ PYMCP
   echo "$name is available"
 }
 
-start_service "analytics-foundation" "$ROOT_DIR/analytics-foundation-api" "$FOUNDATION_START_CMD"
+start_service "analytics-foundation" "$ROOT_DIR/analytics-foundation/analytics-foundation-api" "$FOUNDATION_START_CMD"
 wait_for_get "Analytics Foundation API" "http://127.0.0.1:$FOUNDATION_PORT/health" "$LOG_DIR/analytics-foundation.log"
-start_service "analytics-foundation-mcp" "$ROOT_DIR/analytics-foundation-mcp" "$FOUNDATION_MCP_START_CMD"
+start_service "analytics-foundation-mcp" "$ROOT_DIR/analytics-foundation/analytics-foundation-mcp" "$FOUNDATION_MCP_START_CMD"
 wait_for_mcp "Analytics Foundation MCP" "http://127.0.0.1:$FOUNDATION_MCP_PORT/mcp" "$LOG_DIR/analytics-foundation-mcp.log"
-start_service "opo-capability" "$ROOT_DIR/opo-capability-service" "$OPO_CAPABILITY_START_CMD"
+start_service "opo-capability" "$ROOT_DIR/app-ui/opo-monitoring/opo-monitoring-service/opo-capability-service" "$OPO_CAPABILITY_START_CMD"
 wait_for_get "OPO capability service" "http://127.0.0.1:$OPO_CAPABILITY_PORT/ready" "$LOG_DIR/opo-capability.log"
-start_service "agent-runtime" "$ROOT_DIR/agent-runtime" "$RUNTIME_START_CMD"
+start_service "agent-runtime" "$ROOT_DIR/agent-framework/agent-runtime" "$RUNTIME_START_CMD"
 wait_for_get "Agent Runtime" "http://127.0.0.1:$RUNTIME_PORT/health" "$LOG_DIR/agent-runtime.log"
 start_service "opo-bff" "$ROOT_DIR/app-ui/opo-monitoring" "$BFF_START_CMD"
 wait_for_get "OPO BFF" "http://127.0.0.1:$BFF_PORT/actuator/health" "$LOG_DIR/opo-bff.log"

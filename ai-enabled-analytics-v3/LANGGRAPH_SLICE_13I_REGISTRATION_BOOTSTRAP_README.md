@@ -11,7 +11,7 @@ export AGENT_PACKAGE_MANIFESTS="app-ui/opo-monitoring/agent/agent-package.yaml"
 ## Focused tests
 
 ```bash
-PYTHONPATH=".;./agent-runtime" \
+PYTHONPATH=".;./agent-framework/agent-runtime" \
 python run_pytest.py --import-mode=importlib \
-  agent-registration-bootstrap/tests -v --tb=short
+  agent-framework/agent-registration-bootstrap/tests -v --tb=short
 ```

@@ -19,8 +19,8 @@ persistence and Runtime Service ZIPs.
 
 ```bash
 python -m compileall agent-runtime tests -q
-PYTHONPATH="./agent-runtime" python -m pytest tests/test_persisted_runtime_api.py -v
-PYTHONPATH="./agent-runtime" python -m pytest tests -q
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests/test_persisted_runtime_api.py -v
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests -q
 ```
 
 The prior `tests/test_runtime_api.py` tests the stateless Agent Host API. This

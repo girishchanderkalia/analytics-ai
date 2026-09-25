@@ -32,6 +32,6 @@ Extract this archive at the repository root.
 
 ```bash
 python -m compileall agent-runtime tests -q
-PYTHONPATH="./agent-runtime" python -m pytest tests/test_model_gateway_bootstrap.py -v
-PYTHONPATH="./agent-runtime" python -m pytest tests -q
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests/test_model_gateway_bootstrap.py -v
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests -q
 ```

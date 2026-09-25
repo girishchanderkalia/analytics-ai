@@ -20,7 +20,7 @@ Every node validates the incoming graph state through the existing `copy_graph_s
 ## Test
 
 ```bash
-PYTHONPATH=".;./agent-runtime" python -m pytest tests/langgraph_runtime/test_standard_nodes.py -v --tb=short
+PYTHONPATH=".;./agent-framework/agent-runtime" python -m pytest tests/langgraph_runtime/test_standard_nodes.py -v --tb=short
 ```
 
 This command uses `;` because Git Bash is launching Windows Python in the current development environment.

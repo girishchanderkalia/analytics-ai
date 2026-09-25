@@ -31,6 +31,6 @@ catalog commit fails, none of the new registrations are stored.
 
 ```bash
 python -m compileall agent-runtime/agent_registration tests/agent_registration -q
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/agent_registration -v --tb=short
-PYTHONPATH=".:./agent-runtime" python -m pytest tests -q
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/agent_registration -v --tb=short
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests -q
 ```

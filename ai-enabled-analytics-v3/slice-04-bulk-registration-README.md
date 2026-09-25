@@ -66,7 +66,7 @@ store, for example `./var/agent-catalog.sqlite`.
 ## Test
 
 ```bash
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/test_bulk_agent_registration.py -v --tb=short
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/test_bulk_agent_registration.py -v --tb=short
 ```
 
 Then run the complete suite.

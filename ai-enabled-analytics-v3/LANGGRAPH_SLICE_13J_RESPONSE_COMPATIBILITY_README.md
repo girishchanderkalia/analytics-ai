@@ -7,7 +7,7 @@ contract.
 ## Focused tests
 
 ```bash
-PYTHONPATH=".;./agent-runtime" \
+PYTHONPATH=".;./agent-framework/agent-runtime" \
 python run_pytest.py --import-mode=importlib \
-  opo-response-compatibility/tests -v --tb=short
+  app-ui/opo-monitoring/opo-monitoring-service/opo-response-compatibility/tests -v --tb=short
 ```

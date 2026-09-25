@@ -7,12 +7,12 @@ mock Foundation imports.
 ## Focused tests
 
 ```bash
-PYTHONPATH="./analytics-foundation-client/src" \
-python -m pytest analytics-foundation-client/tests -v --tb=short
+PYTHONPATH="./analytics-foundation/analytics-foundation/analytics-foundation/analytics-foundation-client/src" \
+python -m pytest analytics-foundation/analytics-foundation-client/tests -v --tb=short
 ```
 
 ## Installation
 
 ```bash
-python -m pip install -e ./analytics-foundation-client
+python -m pip install -e ./analytics-foundation/analytics-foundation-client
 ```

@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: application-agent-runtime-config
-  namespace: ai-agents
+  namespace: ai-agent-fwk
 data:
   AGENT_RUNTIME_REPOSITORY_ROOT: /app
   AGENT_RUNTIME_DATABASE_PATH: /app/runtime-data/conversations.sqlite

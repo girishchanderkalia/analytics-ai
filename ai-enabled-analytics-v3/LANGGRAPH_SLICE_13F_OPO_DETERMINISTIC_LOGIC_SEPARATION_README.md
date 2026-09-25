@@ -15,6 +15,6 @@ through MCP tools. It has no platform imports.
 ## Test
 
 ```bash
-python -m pip install -e ./opo-deterministic-logic
-python -m pytest opo-deterministic-logic/tests -v --tb=short
+python -m pip install -e ./app-ui/opo-monitoring/opo-monitoring-service/opo-deterministic-logic
+python -m pytest app-ui/opo-monitoring/opo-monitoring-service/opo-deterministic-logic/tests -v --tb=short
 ```

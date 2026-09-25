@@ -14,7 +14,7 @@ Extract this archive at the `ai-enabled-analytics-v3` repository root. The archi
 
 ```bash
 python -m compileall agent-runtime tests -q
-PYTHONPATH="./agent-runtime" python -m pytest tests -q
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests -q
 ```
 
 The included tests are additive. The final total will be the prior 133 tests plus the tests discovered from the three new test files.

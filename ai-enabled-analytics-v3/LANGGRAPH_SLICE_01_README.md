@@ -36,14 +36,14 @@ Installation: PyPI through requirements-langgraph.txt
 ## Install
 
 ```bash
-python -m pip install -r agent-runtime/requirements-langgraph.txt
+python -m pip install -r agent-framework/agent-runtime/requirements-langgraph.txt
 ```
 
 ## Validate
 
 ```bash
 python -m compileall agent-runtime/langgraph_runtime tests/langgraph_runtime -q
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/langgraph_runtime -v --tb=short
-PYTHONPATH=".:./agent-runtime" python -m pytest tests -q
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/langgraph_runtime -v --tb=short
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests -q
 ```
 

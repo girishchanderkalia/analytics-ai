@@ -7,15 +7,15 @@ Java application BFF.
 ## Test without model-backed chat
 
 ```bash
-python -m pip install -e ./integration-tests
-python -m pytest integration-tests/tests -m "smoke or deterministic" -v --tb=short
+python -m pip install -e ./agent-framework/integration-tests
+python -m pytest integration-agent-framework/tests/tests -m "smoke or deterministic" -v --tb=short
 ```
 
 ## Full model-backed flow
 
 ```bash
 export RUN_AGENT_E2E=true
-python -m pytest integration-tests/tests -v --tb=short
+python -m pytest integration-agent-framework/tests/tests -v --tb=short
 ```
 
 The environment URLs are documented in `integration-tests/.env.example`.

@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: application-agent-runtime-data
-  namespace: ai-agents
+  namespace: ai-agent-fwk
 spec:
   accessModes:
     - ReadWriteOnce

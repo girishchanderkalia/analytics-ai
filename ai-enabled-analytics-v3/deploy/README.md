@@ -1,7 +1,7 @@
 # Agent Runtime deployment slice
 
 This slice packages the tested Agent Runtime as a non-root container and adds
-Kubernetes manifests for the `ai-agents` namespace.
+Kubernetes manifests for the `agents` namespace.
 
 ## Prerequisites
 

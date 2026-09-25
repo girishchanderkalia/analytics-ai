@@ -21,6 +21,6 @@ registered handler before execution begins.
 
 ```bash
 python -m compileall agent-runtime tests -q
-PYTHONPATH=".:./agent-runtime" python -m pytest tests/test_operation_registry_bootstrap.py -v
-PYTHONPATH=".:./agent-runtime" python -m pytest tests -q
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests/test_operation_registry_bootstrap.py -v
+PYTHONPATH=".:./agent-framework/agent-runtime" python -m pytest tests -q
 ```

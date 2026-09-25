@@ -15,7 +15,7 @@ COPY requirements.txt /app/requirements.txt
 RUN python -m pip install --no-cache-dir -r /app/requirements.txt
 
 COPY agent-runtime /app/agent-runtime
-COPY ai-agents /app/ai-agents
+COPY agents /app/agents
 
 USER runtime
 

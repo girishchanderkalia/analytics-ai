@@ -30,8 +30,8 @@ variables.
 ## Validate
 
 ```bash
-python -m pip install -r agent-runtime/requirements.txt
+python -m pip install -r agent-framework/agent-runtime/requirements.txt
 python -m compileall agent-runtime tests -q
-PYTHONPATH="./agent-runtime" python -m pytest tests/test_production_runtime_composition.py -v
-PYTHONPATH="./agent-runtime" python -m pytest tests -q
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests/test_production_runtime_composition.py -v
+PYTHONPATH="./agent-framework/agent-runtime" python -m pytest tests -q
 ```

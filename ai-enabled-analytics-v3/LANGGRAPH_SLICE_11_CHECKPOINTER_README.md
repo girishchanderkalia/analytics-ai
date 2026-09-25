@@ -20,8 +20,8 @@ backend before scaling the Agent Runtime to multiple replicas.
 
 ```bash
 python -m compileall agent-runtime/langgraph_runtime/checkpointing tests/langgraph_runtime -q
-PYTHONPATH=".;./agent-runtime" python -m pytest tests/langgraph_runtime/test_checkpointer.py -v --tb=short
-PYTHONPATH=".;./agent-runtime" python -m pytest tests -q --tb=short
+PYTHONPATH=".;./agent-framework/agent-runtime" python -m pytest tests/langgraph_runtime/test_checkpointer.py -v --tb=short
+PYTHONPATH=".;./agent-framework/agent-runtime" python -m pytest tests -q --tb=short
 ```
 
 ## Integration

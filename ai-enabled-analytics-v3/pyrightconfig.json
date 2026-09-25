@@ -4,7 +4,7 @@
     "tests"
   ],
   "extraPaths": [
-    "./agent-runtime"
+    "./agent-framework/agent-runtime"
   ],
   "typeCheckingMode": "basic",
   "reportMissingImports": true,
